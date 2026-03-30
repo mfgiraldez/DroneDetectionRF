@@ -32,12 +32,13 @@ Parámetros principales
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.signal import stft
 from scipy.ndimage import (binary_erosion, binary_dilation,
-                            label, gaussian_filter1d, percentile_filter)
+                            label, gaussian_filter1d, percentile_filter,
+                            gaussian_filter)
 
-__all__ = ["detectar_bursts", "print_diagnostico", "plot_muestra"]
+__all__ = ["detectar_bursts", "print_diagnostico", "plot_muestra",
+           "plot_espectrograma_3d"]
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  INTERNALS
@@ -62,7 +63,7 @@ def _calcular_features(signal, fs, nperseg, bg_mult):
     bg = np.median(Pxx, axis=1, keepdims=True)
     bg[bg < 1e-12] = 1e-12
     Pxx_w = Pxx / bg                                # espectro whitened
-
+    
     suma = Pxx_w.sum(axis=0)
     suma[suma == 0] = 1e-12
     prob = Pxx_w / suma + 1e-12
@@ -275,108 +276,266 @@ def plot_muestra(iq_tensor, t_ms, H, H_smooth, umbral_v, nf_v, ns,
                  z_thresh=3.0, bg_mult=4.0, max_bins_frac=0.25,
                  adaptive_window_ms=15.0, titulo=""):
     """
-    Genera figura de 4 paneles para inspección visual de la detección.
-
-    Paneles
-    -------
-    1. Amplitud |I+jQ|
-    2. Espectrograma (STFT)
-    3. H(m) raw + H_smooth + umbral CFAR + bursts sombreados
-    4. Bins activos por frame + límite WiFi
+    Figura interactiva Plotly con 5 paneles.
+    Paneles: Amplitud | Espectrograma | Espectro medio | H(m)+CFAR | Bins activos
     """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
     signal = iq_tensor[0].numpy() + 1j * iq_tensor[1].numpy()
     amp    = np.abs(signal)
     tamp   = np.arange(len(amp)) / fs * 1000
-
+    
     f_st, t_st, Zxx_sp = stft(signal, fs=fs, nperseg=nperseg, return_onesided=False)
-    f_sh = np.fft.fftshift(f_st)
-    Pdb  = 10 * np.log10(np.abs(np.fft.fftshift(Zxx_sp, axes=0))**2 + 1e-12)
+    f_sh  = np.fft.fftshift(f_st)
+    Pdb   = 10 * np.log10(np.abs(np.fft.fftshift(Zxx_sp, axes=0))**2 + 1e-12)
+    Pdb_mean = Pdb.mean(axis=1)
+    freq_mhz = f_sh / 1e6
 
-    dt          = float(t_ms[1] - t_ms[0])
+    dt               = float(t_ms[1] - t_ms[0])
     max_bins_abs     = int(nperseg * max_bins_frac)
     n_ruido_esperado = int(nperseg * 2**(-bg_mult))
 
-    COLS = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71',
-            '#3498db', '#9b59b6', '#1abc9c', '#ff69b4']
+    # Para un layout profesional Q1 de revista, usamos colores más sobrios
+    COLS = ['#e74c3c','#e67e22','#16a085','#27ae60','#2980b9','#8e44ad','#2c3e50','#f39c12']
+    RGBA = ['rgba(231,76,60,{a})','rgba(230,126,34,{a})','rgba(22,160,133,{a})',
+            'rgba(39,174,96,{a})','rgba(41,128,185,{a})','rgba(142,68,173,{a})',
+            'rgba(44,62,80,{a})','rgba(243,156,18,{a})']
 
-    def _marcar(ax, alpha=0.2, yref=None):
-        for k, b in enumerate(bursts):
-            ax.axvspan(b["t0"], b["t1"], color=COLS[k % len(COLS)], alpha=alpha)
-            if yref is not None:
-                ax.text((b["t0"]+b["t1"])/2, yref, f'B{k+1}',
-                        color=COLS[k % len(COLS)], ha='center',
-                        fontsize=8, fontweight='bold', clip_on=True)
+    subtitles = [
+        'Amplitud  |I+jQ|',
+        f'Espectrograma  Δf={fs/nperseg/1e3:.2f} kHz  Δt={dt:.2f} ms',
+        'PSD media',
+        'H(m) whitened + Umbral CFAR (P90+MAD)',
+        f'Bins activos  →  FHSS≈{n_ruido_esperado+58} | WiFi≈{nperseg} | Límite={max_bins_abs}'
+    ]
+    
+    fig = make_subplots(
+        rows=4, cols=2,
+        column_widths=[0.85, 0.15],
+        row_heights=[0.12, 0.35, 0.30, 0.23],
+        shared_xaxes=False,
+        shared_yaxes=False,
+        vertical_spacing=0.06,
+        horizontal_spacing=0.015,
+        specs=[
+            [{}, None],   # Row 1: Amplitud solo col 1
+            [{}, {}],     # Row 2: Espectrograma col 1, PSD col 2
+            [{}, None],   # Row 3: H(m) solo col 1
+            [{}, None]    # Row 4: Bins solo col 1
+        ],
+        subplot_titles=subtitles
+    )
 
-    plt.style.use('dark_background')
-    fig, axes = plt.subplots(4, 1, figsize=(16, 14), sharex=True,
-                              gridspec_kw={'height_ratios': [1, 2, 1.8, 1.2]})
-    fig.patch.set_facecolor('#1a1a2e')
-    for ax in axes:
-        ax.set_facecolor('#16213e')
-        ax.tick_params(colors='#e0e0e0')
-        for sp in ax.spines.values():
-            sp.set_color('#444')
+    # P1: Amplitud (downsampled for performance)
+    fig.add_trace(go.Scatter(x=tamp[::8], y=amp[::8],
+                             line=dict(color='#8e44ad', width=0.6),
+                             name='|IQ|', showlegend=False), row=1, col=1)
 
-    # P1 — Amplitud
-    axes[0].plot(tamp[::8], amp[::8], color='#9b59b6', lw=0.4)
-    _marcar(axes[0], alpha=0.3, yref=amp.max() * 0.85)
-    axes[0].set_title('Amplitud  |I+jQ|', color='white', fontsize=11)
-    axes[0].set_ylabel('|IQ|', color='white')
-    axes[0].grid(color='#2c3e6b', alpha=0.3)
+    # P2: Espectrograma (Row 2, Col 1)
+    # Colorbar is moved completely to the far right of the figure to not overlap the middle
+    fig.add_trace(go.Heatmap(x=t_st*1000, y=freq_mhz, z=Pdb,
+                             colorscale='Viridis', showscale=True,
+                             colorbar=dict(len=0.33, y=0.75, x=1.015, thickness=14,
+                                          title=dict(text='dB', side='right', font=dict(size=13, color='black')),
+                                          tickfont=dict(size=12, color='black'))),
+                  row=2, col=1)
 
-    # P2 — Espectrograma
-    axes[1].pcolormesh(t_st * 1000, f_sh / 1e6, Pdb,
-                       shading='gouraud', cmap='viridis')
-    _marcar(axes[1], alpha=0.25)
-    axes[1].set_title(
-        f'Espectrograma  Δf={fs/nperseg/1e3:.2f}kHz  Δt={dt:.2f}ms',
-        color='white', fontsize=11)
-    axes[1].set_ylabel('Freq (MHz)', color='white')
+    # P3: Espectro medio (Row 2, Col 2) - Swap X/Y para que Y sea frecuencia
+    noise_ref = float(np.median(Pdb_mean))
+    fig.add_trace(go.Scatter(y=freq_mhz,
+                             x=np.full(len(freq_mhz), noise_ref),
+                             line=dict(width=0), showlegend=False,
+                             hoverinfo='skip'), row=2, col=2)
+    fig.add_trace(go.Scatter(y=freq_mhz,
+                             x=np.clip(Pdb_mean, noise_ref, None),
+                             fill='tonextx',
+                             fillcolor='rgba(231,76,60,0.28)',
+                             line=dict(width=0), showlegend=False,
+                             hoverinfo='skip'), row=2, col=2)
+    fig.add_trace(go.Scatter(y=freq_mhz, x=Pdb_mean,
+                             line=dict(color='#2980b9', width=1.2),
+                             name='PSD media', showlegend=False), row=2, col=2)
+    fig.add_vline(x=noise_ref, line=dict(color='#555555', width=1, dash='dot'),
+                  annotation_text=f'Med. {noise_ref:.0f}dB',
+                  annotation_position='top right',
+                  annotation_textangle=90,
+                  annotation_font=dict(size=11, color='#333333'), row=2, col=2)
 
-    # P3 — Entropía + umbral CFAR
-    axes[2].fill_between(t_ms, umbral_v, nf_v,
-                         alpha=0.08, color='cyan', label='Zona ruido CFAR')
-    axes[2].plot(t_ms, nf_v,     color='white',   lw=0.8, ls=':', alpha=0.5,
-                 label='P90 local (CFAR)')
-    axes[2].plot(t_ms, umbral_v, color='#e74c3c', lw=1.5, ls='--',
-                 label=f'Umbral CFAR  z={z_thresh}  W={adaptive_window_ms}ms')
-    axes[2].plot(t_ms, H,        color='#2ecc71', lw=0.6, alpha=0.35, label='H(m) raw')
-    axes[2].plot(t_ms, H_smooth, color='#2ecc71', lw=1.8,             label='H(m) smooth')
+    # P4: H(m) + CFAR (Row 3, Col 1)
+    fig.add_trace(go.Scatter(x=t_ms, y=nf_v,
+                             line=dict(width=0), showlegend=False,
+                             hoverinfo='skip'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=t_ms, y=umbral_v, fill='tonexty',
+                             fillcolor='rgba(231,76,60,0.08)',
+                             line=dict(color='#e74c3c', width=1.5, dash='dash'),
+                             name=f'Umbral CFAR z={z_thresh} W={adaptive_window_ms}ms'),
+                  row=3, col=1)
+    fig.add_trace(go.Scatter(x=t_ms, y=nf_v,
+                             line=dict(color='#7f8c8d',
+                                       width=0.8, dash='dot'),
+                             name='P90 local'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=t_ms, y=H,
+                             line=dict(color='rgba(39,174,96,0.35)', width=0.8),
+                             name='H(m) raw'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=t_ms, y=H_smooth,
+                             line=dict(color='#27ae60', width=2.0),
+                             name='H(m) smooth'), row=3, col=1)
+    
     for k, b in enumerate(bursts):
-        seg = slice(b["i0"], b["i1"] + 1)
-        axes[2].fill_between(
-            t_ms[seg], H_smooth[seg], umbral_v[seg],
-            where=H_smooth[seg] < umbral_v[seg],
-            color=COLS[k % len(COLS)], alpha=0.55,
-            label=f"B{k+1} {b['dur_ms']:.2f}ms  z={b['z_peak']:.1f}")
-    axes[2].set_title('H(m) whitened + Umbral CFAR (P90+MAD)', color='white', fontsize=11)
-    axes[2].set_ylabel('Bits', color='white')
-    axes[2].legend(facecolor='#1a1a2e', labelcolor='white', fontsize=7,
-                   ncol=min(4, 2 + len(bursts)), loc='lower left')
-    axes[2].grid(color='#2c3e6b', alpha=0.3)
+        seg = slice(b['i0'], b['i1']+1)
+        t_seg = t_ms[seg]; h_seg = H_smooth[seg]; u_seg = umbral_v[seg]
+        xp = np.concatenate([t_seg, t_seg[::-1]])
+        yp = np.concatenate([np.minimum(h_seg, u_seg), u_seg[::-1]])
+        fig.add_trace(go.Scatter(x=xp, y=yp, fill='toself',
+                                 fillcolor=RGBA[k%len(RGBA)].format(a=0.5),
+                                 line=dict(width=0),
+                                 name=f"B{k+1} {b['dur_ms']:.2f}ms z={b['z_peak']:.1f}"),
+                      row=3, col=1)
 
-    # P4 — Bins activos
-    axes[3].fill_between(t_ms, 0, n_active, color='#f39c12', alpha=0.7, lw=0,
-                          label='Bins activos (Pxx_w > bg_mult×fondo)')
-    axes[3].axhline(max_bins_abs, color='#e74c3c', ls='--', lw=1.5,
-                    label=f'Límite WiFi = {max_bins_abs} bins ({max_bins_frac*100:.0f}%)')
-    axes[3].axhline(n_ruido_esperado, color='white', ls=':', lw=1, alpha=0.5,
-                    label=f'Ruido esperado = {n_ruido_esperado} bins (2^-{bg_mult:.0f}×{nperseg})')
-    _marcar(axes[3], alpha=0.3)
-    axes[3].set_title(
-        f'Bins activos/frame  →  FHSS≈{n_ruido_esperado+58} | '
-        f'WiFi≈{nperseg}  |  Límite={max_bins_abs}',
-        color='white', fontsize=11)
-    axes[3].set_xlabel('Tiempo (ms)', color='white', fontsize=11)
-    axes[3].set_ylabel('N bins', color='white')
-    axes[3].legend(facecolor='#1a1a2e', labelcolor='white', fontsize=8, loc='upper right')
-    axes[3].grid(color='#2c3e6b', alpha=0.3)
+    # P5: Bins activos (Row 4, Col 1)
+    fig.add_trace(go.Scatter(x=t_ms, y=n_active,
+                             fill='tozeroy',
+                             fillcolor='rgba(243,156,18,0.65)',
+                             line=dict(color='rgba(243,156,18,0.9)', width=0.5),
+                             name='Bins activos'), row=4, col=1)
+    fig.add_hline(y=max_bins_abs,
+                  line=dict(color='#e74c3c', width=1.5, dash='dash'),
+                  annotation_text=f'Límite WiFi {max_bins_abs}',
+                  annotation_position='top right',
+                  annotation_font=dict(size=11, color='#e74c3c'), row=4, col=1)
+    fig.add_hline(y=n_ruido_esperado,
+                  line=dict(color='#7f8c8d', width=1, dash='dot'),
+                  annotation_text=f'Ruido≈{n_ruido_esperado}',
+                  annotation_position='bottom right',
+                  annotation_font=dict(size=11, color='#333333'), row=4, col=1)
+
+    # Burst vrects (paneles de tiempo) + etiquetas en P1
+    for k, b in enumerate(bursts):
+        for r in [1, 2, 3, 4]:
+            fig.add_vrect(x0=b['t0'], x1=b['t1'],
+                          fillcolor=COLS[k%len(COLS)], opacity=0.18,
+                          layer='below', line_width=0, row=r, col=1)
+        fig.add_annotation(x=(b['t0']+b['t1'])/2, y=float(amp.max())*0.88,
+                           text=f'<b>B{k+1}</b>',
+                           xref='x', yref='y',
+                           font=dict(color=COLS[k%len(COLS)], size=12),
+                           showarrow=False)
 
     estado = f"✓ {len(bursts)} bursts" if bursts else "✗ Sin detección"
-    fig.suptitle(
-        f'{titulo}  |  {estado}  |  '
-        f'nperseg={nperseg}  z={z_thresh}  bgMult={bg_mult}  '
-        f'maxBins={max_bins_frac*100:.0f}%',
-        color='white', fontsize=11, y=1.005)
-    plt.tight_layout()
+    fig.update_layout(
+        template='plotly_white',
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        height=950,
+        font=dict(size=12, color='#111111'),
+        title=dict(text=f'<b>{titulo}</b>  |  {estado}  |  '
+                        f'nperseg={nperseg}  z={z_thresh}  '
+                        f'bgMult={bg_mult}  maxBins={max_bins_frac*100:.0f}%',
+                   font=dict(size=14, color='black'), x=0.5, xanchor='center'),
+        legend=dict(bgcolor='rgba(255,255,255,0.9)', bordercolor='#cccccc', borderwidth=1,
+                    font=dict(size=11, color='black'),
+                    x=0.865, y=0.48, xanchor='left', yanchor='top'),
+        margin=dict(l=60, r=40, t=80, b=40),
+        
+        # Axis mappings based on grid specifications
+        xaxis=dict(showticklabels=False, title='', linecolor='#cccccc', linewidth=1, mirror=True),
+        xaxis2=dict(matches='x', showticklabels=False, title='', linecolor='#cccccc', linewidth=1, mirror=True),
+        xaxis3=dict(title='dB', title_font=dict(size=12), linecolor='#cccccc', linewidth=1, mirror=True),
+        xaxis4=dict(matches='x', showticklabels=False, title='', linecolor='#cccccc', linewidth=1, mirror=True),
+        xaxis5=dict(matches='x', title='Tiempo (ms)', title_font=dict(size=12), linecolor='#cccccc', linewidth=1, mirror=True),
+
+        yaxis=dict(title='|IQ|', title_font=dict(size=12), linecolor='#cccccc', linewidth=1, mirror=True),
+        yaxis2=dict(title='Freq (MHz)', title_font=dict(size=12), linecolor='#cccccc', linewidth=1, mirror=True),
+        yaxis3=dict(matches='y2', showticklabels=False, title='', linecolor='#cccccc', linewidth=1, mirror=True),
+        yaxis4=dict(title='Bits', title_font=dict(size=12), linecolor='#cccccc', linewidth=1, mirror=True),
+        yaxis5=dict(title='N bins', title_font=dict(size=12), linecolor='#cccccc', linewidth=1, mirror=True),
+    )
+    return fig
+
+
+
+def plot_espectrograma_3d(iq_tensor, fs=14e6, nperseg=2048,
+                          t_stride=None, f_stride=None,
+                          smooth_sigma=2.0, floor_pct=5,
+                          cmap='Turbo', titulo="", t_lim_ms=None):
+    """
+    Espectrograma 3D interactivo (Plotly).
+    Soporta visualización del intervalo temporal completo gracias a t_stride/f_stride dinámicos
+    cuando se dejan en None.
+
+    Parámetros
+    ----------
+    t_stride  : submuestreo temporal  (None → automático: ≈400 puntos)
+    f_stride  : submuestreo espectral (None → automático: ≈300 puntos)
+    t_lim_ms  : (t0,t1) ms para recortar  [None = todo el intervalo, p.ej. los 75ms completos]
+    smooth_sigma : suavizado gaussiano 2D  [2.0 → hace visibles los hops tapados por el ruido]
+    floor_pct : percentil inferior para recortar el suelo de ruido [5]
+    cmap      : colorscale Plotly          ['Turbo']
+    """
+    import plotly.graph_objects as go
+
+    signal  = iq_tensor[0].numpy() + 1j * iq_tensor[1].numpy()
+    f_st, t_st, Zxx = stft(signal, fs=fs, nperseg=nperseg, return_onesided=False)
+    t_ms_3d = t_st * 1000
+    f_sh    = np.fft.fftshift(f_st) / 1e6
+    Pdb_3d  = 10 * np.log10(np.abs(np.fft.fftshift(Zxx, axes=0))**2 + 1e-12)
+
+    if t_lim_ms is not None:
+        mask    = (t_ms_3d >= t_lim_ms[0]) & (t_ms_3d <= t_lim_ms[1])
+        t_ms_3d = t_ms_3d[mask]
+        Pdb_3d  = Pdb_3d[:, mask]
+
+    if smooth_sigma > 0:
+        Pdb_3d = gaussian_filter(Pdb_3d, sigma=smooth_sigma)
+
+    # Compute valid automatic strides to handle 75ms files interactively (~1500 frames defaults to stride 4)
+    if t_stride is None:
+        t_stride = max(1, len(t_ms_3d) // 400)
+    if f_stride is None:
+        f_stride = max(1, len(f_sh) // 300)
+
+    T = t_ms_3d[::t_stride]
+    F = f_sh[::f_stride]
+    Z = Pdb_3d[::f_stride, ::t_stride]
+
+    vmin = float(np.percentile(Z, floor_pct))
+    vmax = float(np.percentile(Z, 99))
+    Z    = np.clip(Z, vmin, vmax)
+
+    info = (f't_stride={t_stride}  f_stride={f_stride}  '
+            f'smooth={smooth_sigma}  →  {len(T)}×{len(F)} pts')
+
+    fig = go.Figure(data=[go.Surface(
+        x=T, y=F, z=Z,
+        colorscale=cmap,
+        cmin=vmin, cmax=vmax,
+        colorbar=dict(thickness=15,
+                      title=dict(text='dB', side='right', font=dict(size=13, color='black')),
+                      tickfont=dict(size=12, color='white')),
+        hovertemplate='Tiempo: %{x:.2f} ms<br>Frec: %{y:.2f} MHz<br>Potencia: %{z:.1f} dB<extra></extra>'
+    )])
+
+    fig.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='#0d0d1a',
+        height=700,
+        font=dict(size=12),
+        title=dict(text=f'<b>{titulo}</b>  |  Espectrograma 3D  |  {info}',
+                   font=dict(size=14, color='white'), x=0.5, xanchor='center'),
+        scene=dict(
+            xaxis=dict(title='Tiempo (ms)', title_font=dict(size=13), tickfont=dict(size=11), gridcolor='#2a2a3a'),
+            yaxis=dict(title='Frecuencia (MHz)', title_font=dict(size=13), tickfont=dict(size=11), gridcolor='#2a2a3a'),
+            zaxis=dict(title='Potencia (dB)', title_font=dict(size=13), tickfont=dict(size=11), gridcolor='#2a2a3a',
+                       range=[vmin, vmax]),
+            camera=dict(
+                up=dict(x=0, y=0, z=1),
+                center=dict(x=0, y=0, z=0),
+                eye=dict(x=1.6, y=-1.6, z=0.9)
+            ),
+            bgcolor='#0d0d1a'
+        ),
+        margin=dict(l=0, r=0, t=60, b=0)
+    )
+    
     return fig
