@@ -7,6 +7,7 @@ Pipeline de detección (3 capas de discriminación):
   1. Entropía espectral whitened  → detecta concentración espectral
   2. Umbral CFAR adaptativo       → se adapta al piso de ruido local
   3. Filtro de ancho espectral    → rechaza interferencias de banda ancha (WiFi/BT)
+                                    (criterio P75 de bins activos, más estricto que mediana)
 
 API pública
 -----------
@@ -26,9 +27,11 @@ Parámetros principales
                     P(bin_ruido > bg_mult×fondo) = 2^(-bg_mult)
   max_bins_frac   : fracción máxima de bins activos       [default: 0.25]
                     FHSS: ~pocos bins | WiFi OFDM: ~todos
+                    Criterio: MAX del burst (cualquier frame WiFi = rechazar)
   smooth_ms       : sigma del suavizado gaussiano de H    [default: 0.2 ms]
                     0 desactiva el suavizado
   adaptive_window_ms: ventana CFAR (0 = umbral global)   [default: 15.0 ms]
+  max_merge_gap_ms: RETIRADO - usar merge_gap_ms mayor si se necesita
 """
 
 import numpy as np
@@ -63,6 +66,7 @@ def _calcular_features(signal, fs, nperseg, bg_mult):
     bg = np.median(Pxx, axis=1, keepdims=True)
     bg[bg < 1e-12] = 1e-12
     Pxx_w = Pxx / bg                                # espectro whitened
+    # Pxx_w = Pxx                                     # Sin whitening
     
     suma = Pxx_w.sum(axis=0)
     suma[suma == 0] = 1e-12
@@ -113,7 +117,8 @@ def _umbral_adaptativo(H, z_thresh, window_ms, dt):
 def detectar_bursts(iq_tensor, fs=14e6, nperseg=2048,
                     z_thresh=3.0, min_burst_ms=0.5, merge_gap_ms=1.0,
                     min_z_abs=4.0, bg_mult=4.0, max_bins_frac=0.25,
-                    smooth_ms=0.2, adaptive_window_ms=15.0):
+                    smooth_ms=0.2, adaptive_window_ms=15.0,
+                    max_merge_gap_ms=5.0):
     """
     Detecta bursts FHSS en una muestra IQ.
 
@@ -128,8 +133,11 @@ def detectar_bursts(iq_tensor, fs=14e6, nperseg=2048,
     min_z_abs    : z-score mínimo del pico de entropía para aceptar burst
     bg_mult      : multiplicador sobre fondo para contar bin como "activo"
     max_bins_frac: fracción máxima de bins activos  (discrimina WiFi vs FHSS)
+                   Criterio: P75 del burst → más estricto que mediana
     smooth_ms    : sigma del suavizado gaussiano sobre H  (0 = sin suavizado)
     adaptive_window_ms : ventana CFAR en ms  (0 = umbral global P90+MAD)
+    max_merge_gap_ms   : gap máximo para fusionar hops del mismo dron (ms)
+                         Si > merge_gap_ms, hace segunda pasada de fusión
 
     Retorna
     -------
@@ -147,7 +155,9 @@ def detectar_bursts(iq_tensor, fs=14e6, nperseg=2048,
                   z_peak          → significancia estadística
                   n_act           → bins activos medianos en el burst
     """
-    signal = iq_tensor[0].numpy() + 1j * iq_tensor[1].numpy()
+    i_chan = iq_tensor[0].numpy() if hasattr(iq_tensor[0], 'numpy') else iq_tensor[0]
+    q_chan = iq_tensor[1].numpy() if hasattr(iq_tensor[1], 'numpy') else iq_tensor[1]
+    signal = i_chan + 1j * q_chan
     t_ms, H, n_active = _calcular_features(signal, fs, nperseg, bg_mult)
     dt = float(t_ms[1] - t_ms[0])
 
@@ -175,6 +185,7 @@ def detectar_bursts(iq_tensor, fs=14e6, nperseg=2048,
     mask = binary_dilation(
                binary_erosion(H_smooth < umbral_v, structure=np.ones(min_f)),
                structure=np.ones(merge_f))
+
     labeled_arr, n_regions = label(mask)
 
     bursts = []
@@ -190,7 +201,19 @@ def detectar_bursts(iq_tensor, fs=14e6, nperseg=2048,
         pk     = np.argmin(h_seg)
         h_min  = h_seg[pk]
         z_peak = (h_min - nf_seg[pk]) / (ns + 1e-10)
-        n_act  = float(np.median(n_active[i0:i1+1]))
+
+        # FIX 1 (v3 - DEFINITIVO): medir n_active SOLO en la ventana estrecha
+        # alrededor del mínimo de entropía (±1ms = el instante del hop FHSS).
+        #
+        # Razonamiento físico:
+        #   - En el frame del mínimo de H, si es FHSS: pocos bins activos (~186)
+        #   - Si es WiFi en ese mismo instante: muchos bins activos (>>512)
+        #   - El WiFi que ocurre en OTROS instantes del burst (fusionado por
+        #     dilatación) NO contamina esta medida → no se rechazan bursts legítimos
+        core_half  = max(1, round(1.0 / dt))          # ±1 ms alrededor del pico
+        core_start = max(i0, i0 + pk - core_half)
+        core_end   = min(i1, i0 + pk + core_half)
+        n_act      = float(np.median(n_active[core_start:core_end + 1]))
 
         if abs(z_peak) < min_z_abs:
             continue
@@ -336,6 +359,7 @@ def plot_muestra(iq_tensor, t_ms, H, H_smooth, umbral_v, nf_v, ns,
     # Colorbar is moved completely to the far right of the figure to not overlap the middle
     fig.add_trace(go.Heatmap(x=t_st*1000, y=freq_mhz, z=Pdb,
                              colorscale='Viridis', showscale=True,
+                             zmin=np.percentile(Pdb, 5), zmax=np.percentile(Pdb, 99.5),
                              colorbar=dict(len=0.33, y=0.75, x=1.015, thickness=14,
                                           title=dict(text='dB', side='right', font=dict(size=13, color='black')),
                                           tickfont=dict(size=12, color='black'))),

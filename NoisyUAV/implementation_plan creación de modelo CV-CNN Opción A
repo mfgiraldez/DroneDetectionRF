@@ -1,0 +1,110 @@
+# Stage 2: CV-CNN sobre Señales I/Q — Plan de Implementación
+
+## Contexto
+
+Disponemos del `metadata_stage1.parquet` con 67,177 detecciones de Stage 1, que incluyen las coordenadas temporales exactas (`frame_i0`, `frame_i1`) de cada ráfaga en cada uno de los 17,744 capturas I/Q originales.
+
+La estrategia de etiquetado es "Opción A": asumir Label Noise simétrico y dejar que el backprop de la red filtre el ruido durante el entrenamiento.
+
+---
+
+## Paso 1: Extractor de Crops (`extractor_dataset_final.py`)
+
+Leerá el `.parquet`, cargará los archivos `.pt` originales y cortará los tensores I/Q.
+
+### Esquema del Dataset resultante
+
+```
+C:\TFM_data\NoisyUAV\stage2\
+    class_0\   ← Target 4 (todo lo que detectó Stage 1 en archivos Noise)
+        burst_s42_t4_snr6_idx0.pt
+        ...
+    class_1\   ← Targets 0-3, 5-6 (todas las ráfagas de archivos de Dron)
+        burst_s11_t0_snr30_idx0.pt
+        ...
+    metadata.csv   ← índice ligero con {ruta, clase, target, snr, dur_ms}
+```
+
+Cada `.pt` guardará un dict `{"x_iq": Tensor[2, N], "label": int, "snr": int, "target": int}` donde `N` es el número de muestras del crop (longitud variable).
+
+> [!NOTE]
+> **Formato de longitud variable**: El crop temporal exacto (de `frame_i0` a `frame_i1` en el STFT) se convierte a índices de muestra multiplicando por `nperseg//2` (hop del STFT). Esto nos da tensores de longitud variable, que el DataLoader manejará mediante `AdaptiveAvgPool1d` o padding.
+
+---
+
+## Paso 2: PyTorch Dataset & DataLoader (`dataset_stage2.py`)
+
+```python
+class BurstDataset(Dataset):
+    # Lee metadata.csv, carga los .pt bajo demanda
+    # __getitem__ → (x_iq: Tensor[2, N], label: int)
+```
+
+El `collate_fn` personalizado aplicará **zero-padding** al mayor tensor del batch para que todos tengan la misma longitud. Esto es más eficiente que `AdaptiveAvgPool1d` en el DataLoader y permite que la CNN trabaje a longitud fija dentro de cada batch.
+
+Split estratificado:
+- **Train: 70%**, Val: 15%, Test: 15%
+- Estratificado por `(target, snr)` para garantizar representación de todos los protocolos y todos los SNR en cada split.
+
+---
+
+## Paso 3: CV-CNN Architecture (`cvcnn_model.py`)
+
+### ¿Por qué CV-CNN sobre Raw I/Q?
+
+| Enfoque | Preserva Fase | Overhead | Interpretabilidad |
+|---|---|---|---|
+| Real 1D CNN sobre `\|IQ\|` | ❌ | Bajo | Alta |
+| 2D CNN sobre Espectrograma | ❌ | Alto (STFT) | Media |
+| **CV-CNN sobre I/Q crudo** | ✅ | Bajo-Medio | Media |
+
+### Arquitectura `ComplexConv1DNet`
+
+```
+Input: z = I + jQ ∈ C^N  (representado como [2, N] real)
+    │
+    ├─ ComplexConv1d(1→32, kernel=7)  + ComplexBN + CReLU
+    ├─ ComplexConv1d(32→64, kernel=5) + ComplexBN + CReLU
+    ├─ ComplexConv1d(64→128, kernel=3)+ ComplexBN + CReLU
+    │
+    ├─ ComplexAdaptiveAvgPool1d(output_size=64)
+    │    → Colapsamos la dimensión temporal aquí con módulo
+    │
+    ├─ Flatten → FC(128*64, 256) + ReLU + Dropout(0.5)
+    └─ FC(256, 2) → Softmax [Clase 0, Clase 1]
+```
+
+**ComplexConv1d**: Implementado de forma económica como dos convoluciones reales vía la regla de Wirtinger:
+```
+Real(output) = Real(W)*Real(x) - Imag(W)*Imag(x)
+Imag(output) = Real(W)*Imag(x) + Imag(W)*Real(x)
+```
+
+**CReLU**: Aplica ReLU por separado a parte real e imaginaria.
+
+**ComplexAdaptiveAvgPool1d**: Aplica el módulo `|z| = sqrt(I² + Q²)` antes del pooling para regresar al dominio real.
+
+### Loss
+
+`CrossEntropyLoss` estándar. No aplicamos ninguna ponderación especial por label noise (Opción A pura).
+
+---
+
+## Propuesta de Ficheros
+
+| Archivo | Descripción |
+|---|---|
+| `extractor_dataset_final.py` | Pasada 2: corta y guarda los crops `.pt` |
+| `NoisyUAV/funciones/dataset_stage2.py` | `BurstDataset` + `collate_fn` |
+| `NoisyUAV/funciones/cvcnn_model.py` | Arquitectura `ComplexConv1DNet` |
+| `entrenar_stage2.ipynb` | Notebook de entrenamiento + curvas |
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Longitud del crop en muestras**: `frame_i0/i1` son índices de frame STFT (con hop = `nperseg//2` = 1024 muestras). ¿Quieres aplicar padding hasta el tamaño del mayor burst dentro del batch (dinámico, eficiente), o padding hasta un tamaño fijo global (ej. el P95 de dur_ms → ~5 ms → ~70,000 muestras)? El padding fijo simplifica la implementación pero consume más memoria.
+
+> [!NOTE]
+> **GPU disponible**: ¿Tienes acceso a GPU para el entrenamiento? La CV-CNN dobla los parámetros respecto a una real, por lo que con batch_size=64 estimamos ~1.5 GB VRAM. Esto afecta los hiperparámetros (batch_size, num_workers).

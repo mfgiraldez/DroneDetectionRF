@@ -1,0 +1,100 @@
+# Plan de Mejora de la Tesis: Stage 2 Extendido
+
+Basado en el feedback de los tutores, el objetivo es experimentar con **4 variantes arquitectónicas** que amplíen el alcance científico de la tesis. Se propone mantener la CV-CNN base como Baseline y añadir los experimentos de forma progresiva (del más fácil al más complejo).
+
+---
+
+## Experimento 1: CV-CNN + Feature Fusion (Entropía) — MÁS PRIORITARIO
+
+**Motivación:** El Stage 1 calcula 5 métricas por burst que actualmente se descartan:
+- `H_min` — Mínimo de entropía del pulso (qué tan ordenada es la señal)
+- `drop_b` — Profundidad de caída de entropía (bit drop)
+- `n_act` — Número de bines activos en el frame del pulso
+- `dur_ms` — Duración del burst en milisegundos
+- `z_peak` — Intensidad del pico normalizado por MAD
+
+**Arquitectura propuesta:** El modelo recibirá **dos entradas**:
+1. El tensor I/Q crudo del burst → pasa por las capas complejas (igual que ahora)
+2. Un vector de 5 features numéricas del burst extraídas por el Stage 1 → pasa por un MLP pequeño
+
+Los dos vectores se concatenan justo antes del clasificador final (Late Fusion):
+
+```
+I/Q [B, 2, N] → ComplexConvBlocks → modulus → Pool → Flatten → [B, 8192]
+          +
+Feats [B, 5] → Linear(5, 32) → ReLU → [B, 32]
+          ↓
+    Concat → [B, 8224] → Linear → 2
+```
+
+**Esfuerzo:** Bajo/Moderado. Requiere modificar `dataset_stage2.py` para incluir las features en el CSV, y modificar `cvcnn.py` para aceptar dos entradas.
+
+**Justificación académica:** Es el tipo de "multi-modal fusion" que aparece en papers de clasificación RF modernos. Le da consistencia matemática a todo el pipeline: el detector no solo sirve para detectar, sino que extrae representaciones estadísticas que alimentan al clasificador.
+
+---
+
+## Experimento 2: Espectrogram CNN (2D CNN sobre |STFT|²) — MODERADO
+
+**Motivación:** Los tutores sugieren mirar el espectrograma. La ventaja es que hay mucha literatura de clasificación de imágenes de espectrograma y los resultados son fácilmente interpretables.
+
+**Arquitectura propuesta:** En vez de I/Q crudo, la entrada es el espectrograma recortado del burst `S(k, m) = |X(k,m)|²` ya calculado por el Stage 1. Se aplica una CNN 2D estándar (ResNet-18 ligero o MobileNet).
+
+```
+Espectrograma [B, 1, F, T] → Conv2D blocks → AdaptiveAvgPool → Flatten → Clasificador
+```
+
+**Esfuerzo:** Moderado. Requiere nuevo dataloader que genere crops de espectrograma en lugar de I/Q. La arquitectura es CNN real estándar (más simple de implementar).
+
+**Ventajas académicas:**
+- Sirve como **comparativa directa** contra la CV-CNN. Si la CV-CNN gana, tienes prueba empírica de que preservar la fase importa.
+- Si el espectrograma compite, demuestra que la fase añade poco y el patrón espectral es suficiente.
+- Ambos resultados son publicables.
+
+---
+
+## Experimento 3: Ablación — Reemplazar Convolución por MLP/Attention — FÁCIL/MODERADO
+
+**Motivación:** Los tutores cuestionan si las capas convolucionales aportan algo dado que el Stage 1 ya aísla temporalmente el pulso. Es una pregunta legítima.
+
+**Propuesta A (MLP Simple):** Tomar el I/Q del burst, hacer `modulus` directo, `AdaptiveAvgPool`, `Flatten`, solo capas lineales. Cero convolución.
+
+**Propuesta B (Transformer/Attention 1D):** Tratar el burst como una secuencia de vectores [I, Q] y aplicar Multi-Head Self-Attention directamente. Captura dependencias temporales largas sin el sesgo inductivo de la convolución.
+
+**Esfuerzo:** Propuesta A es trivial (1h). Propuesta B es moderada (1 día).
+
+**Justificación académica:** Esta ablación responde directamente al comentario del tutor. Si el MLP supera a la CNN, el argumento es que el Stage 1 hace tanto trabajo que la representación temporal se ha vuelto irrelevante. Es un resultado honesto y valioso.
+
+---
+
+## Experimento 4: Mamba (State Space Model) — ALTO ESFUERZO
+
+**Motivación:** Mamba (Gu & Dao, 2023) es la arquitectura del momento para series temporales largas. A diferencia de los Transformers (complejidad O(N²)), Mamba escala linealmente con la longitud de la secuencia.
+
+**Propuesta:** Aplicar el bloque Mamba directamente sobre la secuencia I/Q del burst, usando `mamba-ssm` de HuggingFace.
+
+**Esfuerzo:** Alto. Requiere instalar `mamba-ssm` (solo compatible con CUDA), adaptar el dataloader y ajustar los hiperparámetros desde cero. Riesgo de que el entrenamiento sea inestable sin referencia previa en RF.
+
+**Recomendación:** Dejarlo para el final. Si los experimentos 1 y 2 ya dan buenos resultados, Mamba puede ser la contribución más novedosa del paper pero no es necesaria para la tesis.
+
+---
+
+## Orden de Ejecución Recomendado
+
+| Prioridad | Experimento | Esfuerzo | Impacto Académico |
+|---|---|---|---|
+| 1 | Feature Fusion (Entropía + I/Q) | Bajo | Alto (cierra el loop del pipeline) |
+| 2 | Ablación MLP sin convolución | Muy bajo | Alto (responde directamente al tutor) |
+| 3 | Spectrogram CNN 2D | Moderado | Alto (comparativa clara CV-CNN vs CNN real) |
+| 4 | Mamba | Alto | Muy alto (novedad) |
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> Antes de ejecutar nada, necesito tu confirmación sobre un punto crítico del **Experimento 1**:
+> ¿Las métricas del Stage 1 (`H_min`, `drop_b`, `n_act`, `dur_ms`, `z_peak`) están siendo guardadas ya en el CSV de metadatos del Stage 2? Si no, tendré que modificar el pipeline de preparación de datos para extraerlas antes de generar el dataset.
+
+> [!NOTE]
+> El tutor que cuestionó el `modulus` interpretó mal la arquitectura. En el guion de defensa hay que añadir una aclaración explícita: la convención `[Re_channels | Im_channels]` se mantiene estricta a través de todas las capas y el código la fuerza algebraicamente, NO es una decisión arbitraria.
+

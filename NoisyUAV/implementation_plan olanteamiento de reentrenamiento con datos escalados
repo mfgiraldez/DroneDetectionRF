@@ -1,0 +1,33 @@
+# Goal
+
+Integrate the DroneRF dataset into the NoisyUAV signal processing pipeline. Specifically, design a data loader that interprets DroneRF's custom format and seamlessly feeds it into the `detectar_bursts` function (Stage 1 Entropy Detector) ensuring identical performance as the Jupyter notebook.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The DroneRF dataset recorded the RF environment using two synchronous SDRs, splitting an 80 MHz bandwidth into two 40 MHz files: `L` (Low) and `H` (High). 
+> **How to treat these bands?** Since our `detectar_bursts` and CNN are trained strictly on a 14 MHz scale, I propose that we build our loader to pick ONE of the bands (`L` or `H`) and mathematically **downsample (diezmar) it from 40 MHz to 14 MHz** using `scipy.signal.resample`. This simulates having tuned our 14 MHz SDR into either the upper or lower half of the 2.4 GHz band. Are you okay with treating `H` and `L` as independent channels and decimating them?
+
+## Proposed Changes
+
+### NoisyUAV/funciones/prueba_DroneRF
+
+#### [NEW] cargador_dronerf.py
+- Implement a parser for the **BUI** filename (e.g., `10100`) to extract Drone Model and Flight Mode.
+- Implement an efficient loader for the massive 1D comma-separated float arrays in the CSVs (assuming interleaved $I$ and $Q$ format).
+- Create `obtener_muestra_dronerf(data_dir, bui, segment, band='L')` returning `(iq_complex_array, target, flight_mode_str)`.
+- Use `scipy.signal.resample` to compress the 40 MHz signal mathematically into 14 MHz temporal resolution (`FS = 14e6`).
+
+#### [MODIFY] explorar_dronerf.py
+- Turn this script into a full command-line equivalent of your Jupyter Notebook.
+- It will call `obtener_muestra_dronerf`, execute `detectar_bursts`, and instantly generate the 2D and 3D spectrogram plots.
+
+## Open Questions
+
+> [!WARNING]
+> Please confirm if you have installed `scipy` in your `IAIAVv3` conda environment, as it is strictly required for the `resample` function (Signal Downsampling).
+
+## Verification Plan
+
+### Automated Tests
+Execute `explorar_dronerf.py`. If successful, the terminal will print the entropy diagnostics, and we will visually inspect the generated `plot_muestra` (2D) and `plot_espectrograma_3d` (3D) to confirm that the temporal lengths, burst shapes, and noise floors behave exactly the same mathematically despite originating from 80 MHz SDRs.
