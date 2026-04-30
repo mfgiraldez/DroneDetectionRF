@@ -25,7 +25,8 @@ El script hace TODO de forma autónoma:
 - Cache build (primera vez): ~36 min (17744 señales * ~0.12s/señal)
 - Cache load (siguientes): ~6 segundos
 - Tiempo por época: ~8.5 min (12,420 muestras, num_workers=0)
-- Entrenamiento completo (25 épocas con early stopping): ~3.35 horas
+- Entrenamiento completo Run #1 (25 épocas, early stopping): 3.35 horas
+- Entrenamiento completo Run #2 (60 épocas, sin early stopping): **9.94 horas**
 - IMPORTANTE: La cache es incremental — nunca se recomputa lo ya calculado
 
 ---
@@ -40,6 +41,29 @@ cmd /c "python c:\repos\DroneDetectionRF\NoisyUAV\regenerate_from_checkpoint.py"
 # Con threshold personalizado (sweep en fig_06 indica el óptimo):
 cmd /c "python regenerate_from_checkpoint.py --threshold 0.45"
 ```
+
+---
+
+## 2b. Generar Heatmap por Emisor RF (Drone Model) x SNR
+
+Genera la figura comparativa estilo `evaluacion_analisis_modelo.py` del baseline para el HybridCVCNN:
+
+```bash
+# SIEMPRE con --split all: el test set tiene ~3-8 muestras por celda (target x SNR)
+# lo que produce ceros y celdas vacas estadisticamente sin sentido
+cmd /c "C:\Users\Manuel\anaconda3\envs\IAIAVv3\python.exe -u c:\repos\DroneDetectionRF\NoisyUAV\eval_heatmap_hybrid.py --split all 2>&1"
+```
+
+Genera **2 figuras** en `resultados_hybrid_run2/figures/`:
+- `heatmap_target_snr.png` — Recall por cada modelo de drone x SNR (6 emisores)
+- `heatmap_noise_snr.png`  — Especificidad del clasificador frente al ruido x SNR
+
+**Estructura target_multiclass en NoisyUAV `drone_RF_data`:**
+- `label=1` (drones): target_multiclass = 0, 1, 2, 3, 5, 6
+- `label=0` (ruido):  target_multiclass = 4 (UNICO tipo de ruido en este dataset)
+- NO hay targets 2=AWGN, 3=WiFi separados — eso era `stage2` (dataset antiguo del baseline)
+
+**Inferencia completa (17744 muestras): ~5 minutos en RTX 4060**
 
 ---
 
@@ -169,12 +193,14 @@ Si Grupo C logra >65% con regresión lineal → las features son útiles.
 
 ```
 [CRITICO] iq_crop = iq_crop / iq_crop.pow(2).mean().clamp(min=1e-12).sqrt()  <- NORMALIZAR SIEMPRE
+[CRITICO] Reanudación Automática: Implementar siempre bloque de carga inicial `if CHECKPOINT.exists(): torch.load(...) optimizer.load_state_dict()` para reanudar.
 [ ] os.environ["PYTHONIOENCODING"] = "utf-8"
 [ ] matplotlib.use("Agg")
 [ ] num_workers=0 en todos los DataLoaders
+[ ] CLONAR vistas tensoriales (`iq_crop.clone()`) al usar slicing en `__getitem__` para evitar memory leaks de 8MB.
 [ ] cmd /c "python -u ..." para lanzar desde shell (flag -u para output en tiempo real)
 [ ] torch.load(..., weights_only=False) al cargar dicts de dataset
-[ ] Guardar checkpoint con: model_state, optimizer_state, phys_mean, phys_std, cfg, epoch, val_f1
+[ ] Guardar checkpoint íntegro: model, optimizer, scheduler, scaler, phys_mean, phys_std, cfg, epoch, val_f1
 [ ] Usar BCEWithLogitsLoss con pos_weight para datasets desbalanceados
 [ ] GradientClip = 2.0 para evitar NaN (especialmente con GRU/LSTM)
 [ ] Early stopping sobre Val F1 (no sobre Val Loss — menos sensible al desbalance)
