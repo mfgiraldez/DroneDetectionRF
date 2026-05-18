@@ -1,0 +1,24 @@
+# Pytorch Models
+*.pt
+*.pth
+*.ckpt
+
+# Output directories
+resultados/
+checkpoints/
+__pycache__/
+outputs/
+*cache/
+
+# Large files and datasets
+*.h5
+*.npy
+*.npz
+*.csv
+*.zip
+*.pkl
+*.log
+
+# Python
+.env
+venv/
