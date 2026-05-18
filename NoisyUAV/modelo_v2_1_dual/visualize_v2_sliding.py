@@ -18,7 +18,7 @@ import argparse
 from tqdm import tqdm
 
 # Config
-GOLDEN_RESULTS = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_golden\golden_results_v2_1.csv"
+GOLDEN_RESULTS = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden\golden_results_v2_1.csv"
 DATA_DIR = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CKPT_PATH = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\checkpoints\best_model.pth"
 FS = 14e6

@@ -21,7 +21,7 @@ from NoisyUAV.funciones.dsp_rf.detector_entropia import detectar_bursts
 GOLDEN_CSV = r"C:\TFM_data\NoisyUAV\ground_truth_test_set.csv"
 DATA_DIR   = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CKPT_PATH  = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\checkpoints\best_model.pth"
-OUT_DIR    = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_golden"
+OUT_DIR    = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden"
 FS = 14e6
 WIN_LEN = 131072
 N_STEPS = 16  # Número de ventanas deslizantes

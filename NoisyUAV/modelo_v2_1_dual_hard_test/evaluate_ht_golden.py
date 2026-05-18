@@ -33,7 +33,7 @@ TARGET_HELD_OUT = 5   # Taranis — el dron que NO vio el modelo
 OUT_DIR     = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual_hard_test"
 DATA_DIR    = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CKPT_PATH   = os.path.join(OUT_DIR, "checkpoints", "best_model.pth")
-RESULTS_DIR = os.path.join(OUT_DIR, "figures_ht")
+RESULTS_DIR = os.path.join(OUT_DIR, "figuras_ht")
 CSV_GOLDEN  = r"C:\TFM_data\NoisyUAV\ground_truth_test_set.csv"
 
 FS              = 14e6

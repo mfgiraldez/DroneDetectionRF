@@ -7,7 +7,7 @@ import matplotlib.ticker as mticker
 from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, f1_score, precision_score, precision_recall_curve, auc, average_precision_score, roc_curve, roc_auc_score
 
 # Config
-OUT_DIR  = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual_hard_test\figures_ht"
+OUT_DIR  = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual_hard_test\figuras_ht"
 CSV_PATH = os.path.join(OUT_DIR, "ht_golden_results.csv")
 
 TARGET_HELD_OUT = 5   # Taranis — nunca visto en entrenamiento

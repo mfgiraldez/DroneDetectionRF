@@ -4,8 +4,8 @@ import ast
 from pathlib import Path
 
 # Configuración
-INPUT_CSV = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_golden_filtrado_umbral75\golden_results_v2_filt.csv"
-OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_golden_filtrado_umbral75"
+INPUT_CSV = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden_filtrado_umbral75\golden_results_v2_filt.csv"
+OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden_filtrado_umbral75"
 OUT_CSV = os.path.join(OUT_DIR, "golden_results_v2_filt.csv")
 
 THRESHOLD = 0.75

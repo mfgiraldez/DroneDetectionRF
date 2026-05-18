@@ -51,7 +51,7 @@ from dataset_dual import DualDataset
 CKPT_DEFAULT = r"C:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\checkpoints\best_model.pth"
 CSV_DEFAULT  = r"C:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\dataset_v2_1_clean_pointers.csv"
 DATA_DIR     = r"C:\TFM_data\NoisyUAV\drone_RF_data"
-OUT_DEFAULT  = r"C:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_test"
+OUT_DEFAULT  = r"C:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_test"
 
 TARGET_NAMES = {
     0: "DJI (T0)", 1: "FutabaT14 (T1)", 2: "FutabaT7 (T2)",

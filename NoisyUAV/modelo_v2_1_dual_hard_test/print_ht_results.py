@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.metrics import recall_score, precision_score, f1_score, accuracy_score
 
-df = pd.read_csv(r'NoisyUAV\modelo_v2_1_dual_hard_test\figures_ht\ht_golden_results.csv')
+df = pd.read_csv(r'NoisyUAV\modelo_v2_1_dual_hard_test\figuras_ht\ht_golden_results.csv')
 y_true = df['label_bin']; y_pred = df['pred_bin']
 drones = df[df['label_bin']==1]
 t5   = drones[drones['target']==5]['correct'].mean()

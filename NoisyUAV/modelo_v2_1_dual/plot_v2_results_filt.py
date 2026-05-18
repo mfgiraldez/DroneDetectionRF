@@ -7,7 +7,7 @@ import matplotlib.ticker as mticker
 from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, f1_score, precision_score, precision_recall_curve, auc, average_precision_score, roc_curve, roc_auc_score
 
 # Config
-OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_golden_filtrado_umbral75"
+OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden_filtrado_umbral75"
 CSV_PATH = os.path.join(OUT_DIR, "golden_results_v2_filt.csv")
 
 TARGET_NAMES_FIXED = {

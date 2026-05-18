@@ -22,7 +22,7 @@ OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual"
 DATA_DIR = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CSV_GOLDEN = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\dataset_v2_1_clean_pointers.csv"
 CKPT_PATH = os.path.join(OUT_DIR, "checkpoints", "best_model.pth")
-RESULTS_DIR = os.path.join(OUT_DIR, "figures_golden_filtrado_umbral75")
+RESULTS_DIR = os.path.join(OUT_DIR, "figuras_golden_filtrado_umbral75")
 
 FS = 14e6
 WIN_LEN = 131072

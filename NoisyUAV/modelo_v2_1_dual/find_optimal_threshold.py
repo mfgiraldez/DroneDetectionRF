@@ -6,7 +6,7 @@ import ast
 from sklearn.metrics import recall_score, precision_score, f1_score
 
 # Configuración
-RESULTS_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figures_golden_filtrado_umbral75"
+RESULTS_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden_filtrado_umbral75"
 CSV_PATH = os.path.join(RESULTS_DIR, "golden_results_v2_filt.csv")
 MIN_CONSECUTIVE = 2
 
