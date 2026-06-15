@@ -33,7 +33,16 @@ TARGET_HELD_OUT = 5   # Taranis — el dron que NO vio el modelo
 OUT_DIR     = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual_hard_test"
 DATA_DIR    = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CKPT_PATH   = os.path.join(OUT_DIR, "checkpoints", "best_model.pth")
-RESULTS_DIR = os.path.join(OUT_DIR, "figuras_ht")
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--local_cfar', action='store_true', help='Usar CFAR local sobre cada ventana de 9.4ms')
+args, _ = parser.parse_known_args()
+
+GLOBAL_CFAR = not args.local_cfar
+if GLOBAL_CFAR:
+    RESULTS_DIR = os.path.join(OUT_DIR, "figuras_ht_global")
+else:
+    RESULTS_DIR = os.path.join(OUT_DIR, "figuras_ht_per_window")
 CSV_GOLDEN  = r"C:\TFM_data\NoisyUAV\ground_truth_test_set.csv"
 
 FS              = 14e6
@@ -49,14 +58,17 @@ TARGET_COLORS = {0:"#3F37C9", 1:"#D62828", 2:"#118AB2",
 
 FIGSAVE = dict(dpi=150, bbox_inches="tight")
 
-def calc_phys(iq_full):
+def calc_phys(iq_full, adaptive_window_ms):
     try:
-        _, _, H_smooth, _, nf_v, _, _, bursts = detectar_bursts(
-            iq_full, fs=FS, nperseg=2048, z_thresh=2.5)
+        _, _, H_smooth, _, nf_v, ns, _, bursts = detectar_bursts(
+            iq_full, fs=FS, nperseg=2048, adaptive_window_ms=adaptive_window_ms, min_burst_ms=0.3, z_thresh=2.5)
         nf   = float(np.median(nf_v))
         Hmean= float(np.mean(H_smooth))
-        zp   = max([abs(b['z_peak']) for b in bursts]) if bursts else 0.0
-        return [nf, Hmean, min(zp, 30.0)]
+        if bursts:
+            zp = max([abs(b['z_peak']) for b in bursts])
+        else:
+            zp = (np.min(H_smooth) - nf) / (ns + 1e-10)
+        return [nf, Hmean, float(np.clip(abs(zp), 0, 30))]
     except:
         return [0.0, 0.0, 0.0]
 
@@ -84,8 +96,9 @@ def main():
             d = torch.load(fpath, map_location='cpu', weights_only=False)
             iq_full = d['x_iq'].float()
 
-            phys_vals  = calc_phys(iq_full)
-            phys_tensor= torch.tensor([phys_vals], dtype=torch.float32).to(device)
+            if GLOBAL_CFAR:
+                phys_vals  = calc_phys(iq_full, adaptive_window_ms=15.0)
+                phys_tensor= torch.tensor([phys_vals], dtype=torch.float32).to(device)
 
             max_idx = iq_full.shape[1]
             step    = (max_idx - WIN_LEN) // (N_STEPS - 1)
@@ -93,6 +106,11 @@ def main():
             for i in range(N_STEPS):
                 start = i * step
                 win   = iq_full[:, start:start+WIN_LEN]
+                
+                if not GLOBAL_CFAR:
+                    phys_vals  = calc_phys(win, adaptive_window_ms=0.0)
+                    phys_tensor= torch.tensor([phys_vals], dtype=torch.float32).to(device)
+
                 power = win.pow(2).mean().clamp(min=1e-12).sqrt()
                 win_n = (win / power).unsqueeze(0).to(device)
                 logits, _ = model(win_n, phys_tensor)
@@ -148,6 +166,27 @@ def main():
         print("  >> CONCLUSIÓN: Generalización BUENA — ligera degradación para el dron no visto.")
     else:
         print("  >> CONCLUSIÓN: Memorización PARCIAL — el modelo depende de firmas específicas.")
+    report = f"""
+    ============================================================
+    INFORME FINAL HARD TEST - MODELO V2.1 (TARGET=5 HELD-OUT)
+    ============================================================
+    MÉTRICAS GLOBALES
+      Recall:    {recall_score(y_true, y_pred):.4f}
+      Precision: {precision_score(y_true, y_pred):.4f}
+      F1-Score:  {f1_score(y_true, y_pred):.4f}
+      Accuracy:  {accuracy_score(y_true, y_pred):.4f}
+      AUC-ROC:   {roc_auc_score(y_true, y_prob):.4f}
+      AP:        {average_precision_score(y_true, y_prob):.4f}
+    
+    ANÁLISIS DE GENERALIZACIÓN ZERO-SHOT (Target=5 Taranis)
+      Recall Target={TARGET_HELD_OUT}: {r_t5:.4f}  (n={len(t5)})
+      Recall Otros Drones:        {r_rest:.4f}  (n={len(rest)})
+      Δ Recall (T5 - Resto): {delta:+.4f}
+    ============================================================
+    """
+    with open(os.path.join(RESULTS_DIR, "summary_ht.txt"), 'w', encoding='utf-8') as f:
+        f.write(report)
+    print(report)
     print("="*60)
 
     # ── FIGURA 1: Recall por Target (comparativa principal) ──────────────────

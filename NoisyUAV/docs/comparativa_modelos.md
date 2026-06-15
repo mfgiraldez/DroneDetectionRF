@@ -18,6 +18,7 @@ La siguiente tabla resume los aspectos fundamentales de cada variante en la secu
 | **4. Model V4** | `DualStreamCVCNN_V4` (Streams duplicados: IQ a 512, PSD a 256. Fusión multicapa). | `dataset_v4_train_val.csv` (Hard Negative Mining; exclusión estricta de Golden Set). | 4 variables normalizadas estáticamente por divisores constantes. | **Atenuación analítica:** $z\_peak = z\_peak \times 10^{\frac{\text{SNR}_{\text{target}}}{20.0}}$ (atenuación lineal). | **Fracaso empírico.** Caída masiva de Recall por colapso del CFAR teórico en SNR extrema. |
 | **5. Model V2.1 (Golden)** | `DualStreamCVCNN` (Identidad convolucional a V2; Inferencia sliding window). | `dataset_v2_1_clean_pointers.csv` (Mismo train de V2). Inferencia con Golden Set (3,744 ficheros). | 3 variables de contexto, inyectadas de forma global a nivel de fichero (75 ms). | **AWGN Z-Score Reset:** `z_peak` se fuerza a `0.0` si la muestra se degrada con ruido. | **90.05% F1-score** y **96.29% Especificidad** en Golden Set. Modelo óptimo de producción. |
 | **6. Model V5** | `GatedAttentionMIL` (Bag-Level Multiple Instance Learning con codificador dual). | Bolsas de ráfagas. Pre-filtro LightGBM con umbral de confianza $\ge 0.6$. | 11 variables físicas extraídas localmente por ráfaga. | Aumentación de ruido al 30% a nivel de instancia dentro de la bolsa. | Limitado a SNR media; colapso en SNR extrema por criba excesiva de LightGBM. |
+| **7. Model V2.2 (Dynamic)**| `DualStreamCVCNN` (Identidad convolucional a V2). | `dataset_v2_1_clean_pointers.csv`. Data augmentation sobre ventana de 9.4 ms. | 3 variables de contexto (`global_nf`, `global_H_mean`, `z_peak`). | **Recálculo CFAR Dinámico:** Se inyecta AWGN y se vuelve a calcular matemáticamente el $Z\_score$ y nivel de ruido en tiempo real. | En desarrollo (Paradigma Teórico Puro). |
 
 ---
 
@@ -151,6 +152,20 @@ Para evitar saturar la red de atención MIL con ráfagas ruidosas, se implement�
 *   **Fallo de Acoplamiento Espectral:** A baja SNR, las variables físicas que alimentan al LightGBM sufren una distorsión no lineal severa debida al ruido térmico de fondo (el ancho de banda instantáneo estimado se ensancha artificialmente, la flatitud espectral tiende a $1.0$ y la curtosis decae drásticamente).
 *   **El Efecto de Criba Catastrófica:** Al evaluar una ráfaga real de dron a baja SNR (ej. $-12\text{ dB}$), el clasificador LightGBM, incapaz de correlacionar estas características ruidosas con la firma limpia aprendida en entrenamiento, les asigna una probabilidad de dron `p_drone` inferior a $0.1$. 
 *   Como el umbral de supervivencia de bolsa está fijado en `FILTER_CONF_THRESHOLD = 0.6`, **el filtro descarta y borra la ráfaga de dron de la bolsa antes de que esta pueda ser procesada por la red profunda**. Si alguna ráfaga ruidosa logra superar el filtro, la red de atención ABMIL diluye su peso en el promedio de la bolsa al competir con el resto de instancias que contienen ruido de fondo plano.
+
+---
+
+### 2.7. Paso 7 — Model V2.2 (Recálculo Dinámico CFAR - El Paradigma Teórico Puro)
+
+A raíz de una revisión teórica del pipeline de aumentación (AWGN), se plantea esta variante como evolución conceptual directa de la V2.1 para explorar el límite de precisión analítica.
+
+#### Fundamento Teórico y Eliminación de Heurísticas
+En la V2.1, para evitar que la red sufriera de *Data Leakage* al inyectarle ruido a una muestra limpia cuyo $Z\_score$ precalculado seguía siendo alto, se aplicó la heurística de forzar `z_peak = 0.0`. 
+La variante V2.2 adopta un enfoque de **purismo analítico**: al inyectar ruido térmico (AWGN) en el tensor IQ de 9.4 ms, no se fuerza el valor físico a cero, sino que **se ejecuta de nuevo el detector de entropía espectral completo (CFAR) en tiempo real sobre la nueva señal degradada**.
+*   **Lo que aprende la red:** En lugar de asumir ceguera total desde un principio, la red recibe el impacto matemático real que el ruido ha causado en el umbral de fondo (`global_nf`) y en el valle de entropía (`z_peak`). La red observa y aprende la degradación continua y natural del algoritmo CFAR a medida que baja la SNR. Al ser la ventana de sólo 9.4 ms, se evalúa cómo el CFAR estima el ruido sin contexto amplio, representando la dificultad algorítmica real.
+
+#### Desafío de Ingeniería
+Este paradigma exige ejecutar la STFT, la Welch Log-PSD, el umbral adaptativo y la morfología matemática dinámica dentro del método `__getitem__` del DataLoader de PyTorch para el 40% de las muestras en cada época. Para contrarrestar este inmenso cuello de botella de procesamiento (puramente en CPU), se requiere un entrenamiento prolongado en equipos dedicados, permitiendo equilibrar el peso computacional a cambio de la máxima pureza teórica del modelo.
 
 ---
 

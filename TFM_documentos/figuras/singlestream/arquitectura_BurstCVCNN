@@ -1,0 +1,84 @@
+digraph BurstCVCNN {
+	rankdir=TB ratio=compress size="8.27,11.69" splines=ortho
+	nodesep=0.8 ranksep=0.7
+	node [fontname=Helvetica fontsize=11 shape=none]
+	edge [color="#424242" fontname=Helvetica fontsize=10]
+	subgraph cluster_cvcnn {
+		color="#1565C0" fontname="Helvetica-Bold" fontsize=12 label="Extractor de Características Complejas (CVCNNBackbone)" style=dashed
+		iq [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#E3F2FD"><B>Entrada: Señal I/Q</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Tensor: [B, 2, 131072]<br/>Equivalente a 9.4 ms @ 14 MHz<br/>Canal 0: Real (I) | Canal 1: Imag (Q)</TD></TR>
+        </TABLE>>]
+		conv1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#BBDEFB"><B>ComplexConvBlock 1</B></TD></TR>
+            <TR><TD ALIGN="LEFT">ComplexConv1D (k=11, s=2, p=5)<br/>Canales: 1 → 32<br/>+ ComplexBatchNorm1D<br/>+ CReLU</TD></TR>
+        </TABLE>>]
+		conv2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#BBDEFB"><B>ComplexConvBlock 2</B></TD></TR>
+            <TR><TD ALIGN="LEFT">ComplexConv1D (k=11, s=2, p=5)<br/>Canales: 32 → 64<br/>+ ComplexBatchNorm1D<br/>+ CReLU</TD></TR>
+        </TABLE>>]
+		conv3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#BBDEFB"><B>ComplexConvBlock 3</B></TD></TR>
+            <TR><TD ALIGN="LEFT">ComplexConv1D (k=11, s=2, p=5)<br/>Canales: 64 → 128<br/>+ ComplexBatchNorm1D<br/>+ CReLU</TD></TR>
+        </TABLE>>]
+		conv4 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#BBDEFB"><B>ComplexConvBlock 4</B></TD></TR>
+            <TR><TD ALIGN="LEFT">ComplexConv1D (k=11, s=1, p=5)<br/>Canales: 128 → 128<br/>+ ComplexBatchNorm1D<br/>+ CReLU</TD></TR>
+        </TABLE>>]
+		modulus [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#C8E6C9"><B>Módulo Matemático (|z|)</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Transición Dominio: $\mathbb{C} \rightarrow \mathbb{R}$<br/>$|z| = \sqrt{Re^2 + Im^2 + \epsilon}$</TD></TR>
+        </TABLE>>]
+		pool [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#C8E6C9"><B>Reducción Espacial</B></TD></TR>
+            <TR><TD ALIGN="LEFT">AdaptiveAvgPool1d(32)<br/>Salida: [B, 128, 32]</TD></TR>
+        </TABLE>>]
+		fc_cnn [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#FFF9C4"><B>Proyección CNN</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Flatten → Linear(4096, 256)<br/>CNN Embedding: [B, 256]</TD></TR>
+        </TABLE>>]
+		iq -> conv1 [label=" z = I + jQ"]
+		conv1 -> conv2 [label=" [B, 64, N/2]"]
+		conv2 -> conv3 [label=" [B, 128, N/4]"]
+		conv3 -> conv4 [label=" [B, 256, N/8]"]
+		conv4 -> modulus [label=" $\mathbb{C}$ Tensor"]
+		modulus -> pool [label=" $\mathbb{R}$ Tensor"]
+		pool -> fc_cnn
+	}
+	subgraph cluster_phys {
+		color="#E65100" fontname="Helvetica-Bold" fontsize=12 label="Vector Físico (Detector de Entropía)" style=dashed
+		phys_in [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#FFE0B2"><B>Entrada: Parámetros CFAR</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Tensor: [B, 8]<br/>dur_ms, z_peak, drop_b, n_act_burst,<br/>global_nf, global_ns, global_H_mean, p75_act</TD></TR>
+        </TABLE>>]
+		phys_bn [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#FFE0B2"><B>Normalización Independiente</B></TD></TR>
+            <TR><TD ALIGN="LEFT">BatchNorm1D(8)<br/>Feats Embedding: [B, 8]</TD></TR>
+        </TABLE>>]
+		phys_in -> phys_bn
+	}
+	subgraph cluster_mlp {
+		color="#4A148C" fontname="Helvetica-Bold" fontsize=12 label="Fusión y Clasificación" style=dashed
+		concat [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#E1BEE7"><B>Concatenación ($igoplus$)</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Eje 1 (Dim=1)<br/>Tensor Fusión: [B, 264]</TD></TR>
+        </TABLE>>]
+		mlp1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#F3E5F5"><B>Capa Oculta 1</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Linear(264, 256)<br/>BatchNorm1D(256)<br/>ReLU + Dropout(0.4)</TD></TR>
+        </TABLE>>]
+		mlp2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#F3E5F5"><B>Capa Oculta 2</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Linear(256, 128)<br/>BatchNorm1D(128)<br/>ReLU + Dropout(0.4)</TD></TR>
+        </TABLE>>]
+		output [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
+            <TR><TD BGCOLOR="#F8BBD0"><B>Capa de Clasificación</B></TD></TR>
+            <TR><TD ALIGN="LEFT">Linear(128, 1)<br/>Salida: Logit (BCEWithLogitsLoss)</TD></TR>
+        </TABLE>>]
+		concat -> mlp1
+		mlp1 -> mlp2
+		mlp2 -> output
+	}
+	fc_cnn -> concat [label=" 256 features"]
+	phys_bn -> concat [label=" 8 features"]
+}

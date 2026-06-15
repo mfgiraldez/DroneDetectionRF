@@ -1,0 +1,436 @@
+\chapter{Resultados y Discusión}
+\label{cap:resultados_discusion}
+
+Este capítulo presenta los resultados experimentales obtenidos durante la evaluación de las arquitecturas de detector propuestas. En primer lugar, se establece la metodología de evaluación, definiendo la naturaleza de los datos de prueba, las métricas utilizadas y las representaciones gráficas que condensan toda esta información. A continuación, se detalla el comportamiento de cada iteración del modelo, justificando los motivos estructurales que conducen tanto a sus deficiencias como a sus mejoras predictivas. Finalmente, el capítulo concluye con una discusión que confronta directamente la viabilidad del modelo definitivo frente a las soluciones establecidas en el estado del arte.
+
+% ==========================================
+% SECCIÓN 1: METODOLOGÍA
+% ==========================================
+\section{Metodología de Evaluación}
+\label{sec:metodologia_evaluacion}
+
+\subsection{Conjunto de Datos y Partición}
+\label{subsec:eval_dataset}
+
+La evaluación de los modelos se realiza de manera exclusiva sobre un subconjunto de prueba, \textit{test set}, extraído de la base de datos \textit{NoisyUAV v2}. Para garantizar la validez estadística y evitar el \textit{data leakage}, este subconjunto de $3,744$ grabaciones se aisló desde el inicio de la investigación, asegurando que ningún modelo ha operado con estos datos durante el entrenamiento. Este subconjunto de prueba está perfectamente balanceado: contiene el mismo número de grabaciones para cada clase de dron y para cada nivel de \gls{snr}. La clase de ruido puro sigue también esta misma distribución de muestras.
+
+\subsection{Métricas de Rendimiento}
+\label{subsec:eval_metricas}
+La identificación de presencia de dron a partir de la detección de sus transmisiones puede ser evaluada como un problema de clasificación binaria tradicional. Bajo ese paradigma, en la presente investigación existen dos clases: la Clase Dron (identificada como Clase $1$) y la Clase No Dron (identificada como Clase $0$). De esta forma, el rendimiento se evalúa a partir de los Verdaderos Positivos ($TP$), Falsos Positivos ($FP$), Verdaderos Negativos ($TN$) y Falsos Negativos ($FN$), derivando las siguientes métricas fundamentales:
+\begin{itemize}
+    \item \textbf{Accuracy (Exactitud):} proporción de predicciones correctas sobre el total de observaciones. Aunque ofrece una visión global, en escenarios desbalanceados resulta una métrica engañosa, ya que un modelo que clasifique constantemente todo como ruido logrará una alta exactitud aparente. Se calcula como $(TP + TN) / (TP + TN + FP + FN)$.
+    
+    \item \textbf{Precision (Valor Predictivo Positivo):} probabilidad de que una detección marcada por el modelo corresponda realmente a la emisión de un dron. Su control es crítico para minimizar la tasa de falsas alarmas. Se define como $TP / (TP + FP)$.
+    
+    \item \textbf{Recall (Sensibilidad o Probabilidad de Detección):} proporción de transmisiones reales de \gls{uav}s que el sistema logra identificar. Una alta sensibilidad garantiza la detección temprana ante intrusiones, siendo prioritaria en sistemas de seguridad. Se calcula mediante $TP / (TP + FN)$.
+    
+    \item \textbf{Especificidad:} capacidad del modelo para rechazar correctamente las muestras que contienen únicamente ruido o interferencias ($TN / (TN + FP)$). En entornos de alta saturación electromagnética, mantener una alta especificidad certifica la robustez de la arquitectura.
+    
+    \item \textbf{F1-Score:} media armónica entre \textit{Precision} y \textit{Recall}. Esta métrica castiga los valores extremos en cualquiera de sus dos componentes, proporcionando un estimador unificado y estricto del rendimiento predictivo del clasificador sobre la clase minoritaria. Se formula como $2 \cdot (Precision \cdot Recall) / (Precision + Recall)$.
+\end{itemize}
+
+\subsection{Herramientas de Visualización}
+\label{subsec:eval_artefactos}
+
+Para interpretar la relación directa entre el diseño de la red neuronal y su respuesta a la degradación física del canal, los resultados numéricos se proyectan en cinco artefactos visuales:
+
+\begin{itemize}
+    \item \textbf{Matriz de confusión:} representa la distribución absoluta de las predicciones frente a las etiquetas verdaderas. Permite identificar si el modelo presenta una tendencia hacia el rechazo (elevados $FN$) o hacia la falsa alarma (elevados $FP$).
+    
+    \item \textbf{Curva Precision-Recall (PR):} grafica la evolución del compromiso entre \textit{Precision} y \textit{Recall} a lo largo del espectro continuo de umbrales de decisión. A diferencia de las curvas ROC clásicas, la curva PR no se ve alterada por una elevada cantidad de verdaderos negativos derivados del ruido, constituyendo la herramienta gráfica más rigurosa para comparar arquitecturas en problemas desbalanceados.
+    
+    \item \textbf{Gráfico \textit{Accuracy} vs SNR:} evalúa la fiabilidad global del sistema segregada en rangos de \gls{snr} definidos (alta, moderada y crítica).
+    
+    \item \textbf{Gráfico \textit{Recall} vs SNR:} demuestra el rendimiento del modelo ante el desvanecimiento del canal, marcando el nivel de SNR en el que la red pierde la capacidad de distinguir la transmisión frente al ruido de fondo.
+    
+    \item \textbf{Mapa de calor SNR vs Clase (Probabilidad de Detección):} matriz bidimensional que desglosa la probabilidad de acierto para cada uno de los tipos de dron específicos (y para la Clase Ruido) en función del nivel de \gls{snr}. Los huecos en blanco reflejan combinaciones ausentes en el conjunto de prueba.
+\end{itemize}
+
+% ==========================================
+% SECCIÓN 2: RESULTADOS EXPERIMENTALES
+% ==========================================
+\section{Resultados Experimentales}
+\label{sec:resultados_experimentales}
+
+Esta sección detalla el comportamiento de las sucesivas iteraciones del sistema. La evaluación se presenta de forma secuencial, relacionando directamente el rendimiento de cada versión con las decisiones adoptadas en su diseño.
+
+\subsection{Modelo de Referencia: \textit{SingleStream-CVCNN}}
+\label{subsec:res_baseline}
+La arquitectura SingleStream basa su funcionamiento en el procesamiento de la ráfaga temporal compleja I/Q una vez esta ha sido recortada por la etapa previa del detector de entropía y CFAR. En primer lugar, se evalúan las métricas globales del clasificador. La Figura \ref{fig:res_singlestream_global} presenta la Matriz de Confusión y la curva Precision-Recall, herramientas fundamentales para diagnosticar el sesgo del modelo.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/SingleStream/confusion_matrix.pdf}
+        \caption{Matriz de confusión.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/SingleStream/pr_curve.pdf}
+        \caption{Curva Precision-Recall.}
+    \end{subfigure}
+    \caption{Rendimiento global del modelo de referencia SingleStream.}
+    \label{fig:res_singlestream_global}
+\end{figure}
+
+Como se observa, el modelo incurre en un 15.94\% de falsos negativos. Para comprender el origen de este sesgo, resulta indispensable evaluar la fiabilidad asintótica del sistema frente a la degradación del canal. La Figura \ref{fig:res_singlestream_snr} detalla la caída operativa conforme aumenta el ruido térmico.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/SingleStream/accuracy_snr_bars.pdf}
+        \caption{\textit{Accuracy} según SNR.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/SingleStream/recall_snr_lines.pdf}
+        \caption{\textit{Recall} según SNR.}
+    \end{subfigure}
+    \caption{Evolución paramétrica del modelo SingleStream frente a la SNR.}
+    \label{fig:res_singlestream_snr}
+\end{figure}
+
+El análisis revela un colapso abrupto al descender de -15 dB de SNR. Esta caída en el \textit{Recall} no se debe a una incapacidad del modelo \textit{SingleStream-CVNN} para extraer patrones, sino a una limitación de la etapa de detección de ráfagas que la precede. A niveles críticos de atenuación, el salto FHSS es absorbido por la varianza del ruido y no supera el umbral de entropía estipulado. Como consecuencia, el detector extrae de forma errónea ventanas de ruido puramente térmico y se las entrega al clasificador con la etiqueta de señal útil. La red neuronal minimiza su función de coste clasificando las transmisiones atenuadas como ruido genérico. 
+Finalmente, el mapa de calor (Figura \ref{fig:res_singlestream_heatmap}) evidencia la probabilidad de detección por transmisor específico y la probabilidad de detección correcta de ausencia de dron. Como se puede observar, el comportamiento del detector es bastante aceptable teniendo en cuenta la dificultad del problema a resolver, pero se identifican fácilmente dos problemas o comportamientos indeseados que se detallan a continuación:
+
+\begin{enumerate}\itemsep 0em
+    \item El detector debería tener una probabilidad de detección perfecta (con valor $1.00$ en el mapa de calor) en situaciones favorables. Esto es, con \gls{snr} mayores o iguales a $0$ dB, el sistema debería de obtener el valor de probabilidad de detección comentado anteriormente. Se puede observar un caso crítico: para el \textit{Target 2} (dron FutabaT7), los valores del \textit{Recall} son de $0.5$, $0.6$, $0.0$, $0.67$ y $0.8$ para valores de \gls{snr} de 20, 24, 26, 28 y 30 dB. Por otra parte, repartidos entre niveles de alta \gls{snr}, existen valores de la tasa de acierto entre $0.75$ y $0.9$. Estos problemas no se dan a causa de la etapa de detección previa, ya que a estos niveles de relación señal a ruido, el detector basado en entropía y CFAR es capaz de recortar perfectamente las ráfagas de este dron y de cualquier otro; por lo que el causante de este problema es el propio modelo clasificador, evidenciando un cambio necesario en su arquitectura.
+
+    \item Existe una situación en particular: \textit{Target 6}, correspondiente al dron Turnigy a $0$ dB de \gls{snr}, para la que no existe ninguna muestra en el subconjunto de datos de entrenamiento. Problema que evidencia que el detector basado en entropía y CFAR no ha sido capaz de recortar ninguna ráfaga para este \textit{target} en ese nivel de relación señal a ruido específico. 
+\end{enumerate}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figuras/capitulo5/SingleStream/heatmap_snr_class.pdf}
+    \caption{Mapa de calor SNR vs Clase para el modelo SingleStream.}
+    \label{fig:res_singlestream_heatmap}
+\end{figure}
+
+\subsection{Segunda iteración: \textit{DualStream}}
+\label{subsec:res_dualstream}
+Para solventar la inconsistencia de las ventanas recortadas, la variante DualStream inyecta una estimación de la densidad espectral de potencia en paralelo a la secuencia temporal, combinando ambos flujos mediante un bloque de atención dinámica. La Figura \ref{fig:res_dualstream_global} constata el impacto global de esta fusión estructural a través de su matriz de confusión.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream/confusion_matrix.pdf}
+        \caption{Matriz de confusión.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream/pr_curve.pdf}
+        \caption{Curva Precision-Recall.}
+    \end{subfigure}
+    \caption{Rendimiento global del modelo DualStream con atención cruzada.}
+    \label{fig:res_dualstream_global}
+\end{figure}
+
+Tal y como demuestra el incremento del F1-Score al 84.52\%, la disponibilidad del dominio espectral permite a la red identificar transmisiones en regímenes de \gls{snr} extremadamente bajos. El comportamiento ante el ruido (Figura \ref{fig:res_dualstream_snr}) mejora sustancialmente frente a su predecesor.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream/accuracy_snr_bars.pdf}
+        \caption{\textit{Accuracy} según SNR.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream/recall_snr_lines.pdf}
+        \caption{\textit{Recall} según SNR.}
+    \end{subfigure}
+    \caption{Evolución paramétrica del modelo DualStream frente a la SNR.}
+    \label{fig:res_dualstream_snr}
+\end{figure}
+
+El mecanismo de atención permite a la red apoyarse en la densidad espectral cuando la rama temporal se ha degradado por completo. Sin embargo, la inclusión de variables estáticas en el bloque final (como el ancho de banda aparente) incita un comportamiento indeseado: la red sesga sus inferencias apoyándose en estos valores escalares para reducir la pérdida, restando importancia a los mapas de características extraídos por las capas convolucionales. 
+El mapa de calor resultante (Figura \ref{fig:res_dualstream_heatmap}) ilustra cómo se han abordado los problemas identificados en la arquitectura anterior. No obstante, se mantiene la poca generalización para niveles muy bajos de \gls{snr}; a partir de $-8$ dB, algunos objetivos como el dron DJI (\textit{Target 0}) ya comienza a tener dificultades en su detección. Asimismo, se comprueba cómo el modelo sigue teniendo complicaciones para obtener una precisión perfecta en entornos de alta relación señal a ruido. 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figuras/capitulo5/DualStream/heatmap_snr_class.pdf}
+    \caption{Mapa de calor SNR vs Clase para el modelo DualStream.}
+    \label{fig:res_dualstream_heatmap}
+\end{figure}
+
+\subsection{Tercera iteración: \textit{DualStream-Deep}}
+\label{subsec:res_deep}
+
+Bajo la hipótesis de que la red carecía de la capacidad paramétrica suficiente para aislar características altamente atenuadas, el modelo DualStream-Deep incrementó dramáticamente su profundidad estructural (hasta 512 canales convolucionales), dando lugar al modelo \textit{DuelStream-Deep}. La Figura \ref{fig:res_deep_global} exhibe el efecto inmediato de esta decisión.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-Deep/confusion_matrix.pdf}
+        \caption{Matriz de confusión.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-Deep/pr_curve.pdf}
+        \caption{Curva Precision-Recall.}
+    \end{subfigure}
+    \caption{Rendimiento global del modelo sobredimensionado DualStream-Deep.}
+    \label{fig:res_deep_global}
+\end{figure}
+
+Contrario a la expectativa teórica, los resultados constatan un colapso generalizado. El modelo ignora los objetivos y clasifica de manera constante las señales válidas como ruido. La gráfica de evaluación frente a la SNR (Figura \ref{fig:res_deep_snr}) corrobora este mal resultado.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-Deep/accuracy_snr_bars.pdf}
+        \caption{\textit{Accuracy} según SNR.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-Deep/recall_snr_lines.pdf}
+        \caption{\textit{Recall} según SNR.}
+    \end{subfigure}
+    \caption{Colapso del rendimiento del modelo DualStream-Deep ante cualquier régimen de ruido.}
+    \label{fig:res_deep_snr}
+\end{figure}
+
+Este comportamiento valida un principio fundamental de la teoría estadística del aprendizaje: el sobredimensionamiento sin regularización en entornos estocásticos conduce irremediablemente a la memorización. La elevada cantidad de pesos permitió a la arquitectura acoplarse con exactitud milimétrica a la densidad local del ruido térmico presente en los datos de entrenamiento, es decir, el clasificador empezó a memorizar el ruido existente en las transmisiones de los drones (efecto que se comentó detalladamente en el Capítulo \ref{cap:cap:arquitectura}, Sección \ref{subsec:subsec:dualstream_deep}). Al someterse al conjunto de prueba, la red es incapaz de asimilar distribuciones inexploradas. Su probabilidad de detección, como se comprueba en el mapa de calor (Figura \ref{fig:res_deep_heatmap}), desciende con respecto al modelo de la misma familia con una cantidad menor de parámetros.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figuras/capitulo5/DualStream-Deep/heatmap_snr_class.pdf}
+    \caption{Mapa de calor SNR vs Clase para el modelo DualStream-Deep.}
+    \label{fig:res_deep_heatmap}
+\end{figure}
+
+\clearpage
+\subsection{Modelos de Evaluación Continua}
+\label{subsec:res_modelos_continuos}
+
+Para superar las debilidades del detector y el sobredimensionamiento, la última fase evolutiva de la arquitectura instaura el procesamiento continuo. Se recuerda que la principal modificación respecto a los modelos anteriormente comentados es el método de inferencia, que ahora se realiza a partir de la evaluación por ventanas deslizantes y solapadas sobre la duración total de las grabaciones. Dada la similitud estructural entre los modelos \textit{DualStream-SlidingWindow} y \textit{DualStream-DynamicSlidingWindow}, ambos se abordan de forma consecutiva agrupados en esta misma sección, desglosando posteriormente sus diferencias clave asociadas a la mitigación local de interferencias.
+
+\subsubsection{Cuarta iteración: \textit{DualStream-SlidingWindow}}
+\label{subsubsec:res_sliding}
+
+Esta versión asienta la base del procesamiento continuo. Para evaluar el rendimiento de este modelo, se realizó previamente un análisis paramétrico exhaustivo destinado a seleccionar el umbral de decisión óptimo. Tras evaluar la curva Precision-Recall, el umbral de probabilidad de detección se fijó en el valor exacto que maximiza el F1-Score, garantizando así un equilibrio estricto que prioriza la robustez frente a los falsos positivos. La Figura \ref{fig:res_sliding_global} ilustra el rotundo impacto positivo en el diagnóstico global del modelo bajo este nivel de exigencia.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-SlidingWindow/confusion_matrix.pdf}
+        \caption{Matriz de confusión.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-SlidingWindow/pr_curve.pdf}
+        \caption{Curva Precision-Recall.}
+    \end{subfigure}
+    \caption{Rendimiento global del modelo continuo DualStream-SlidingWindow con umbral basado en el F1-Score.}
+    \label{fig:res_sliding_global}
+\end{figure}
+
+Las métricas corroboran el acierto de esta aproximación. El F1-Score asciende al 90.05\%. Al suprimir el truncamiento temporal que ejecutaba el detector de energía previo, la \gls{cv-cnn} dispone del contexto total para modelar la incertidumbre directamente en los canales 1D. La estabilidad asintótica resultante queda confirmada en la evaluación de degradación de la Figura \ref{fig:res_sliding_snr}. Según esta figura, el único dron más problemático vuelve a ser el comentado en la Subsección \ref{subsec:res_dualstream}: el \textit{Target 0}, correspondiente al dron DJI. Esto ocurre porque este dispositivo tiene el protocolo de comunicación menos favorable para su detección, ya que sus tramas son cortas y estrechas, explicando de esta forma las carencias que tiene el modelo para su identificación en entornos de baja \gls{snr}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-SlidingWindow/accuracy_snr_bars.pdf}
+        \caption{\textit{Accuracy} según SNR.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-SlidingWindow/recall_snr_lines.pdf}
+        \caption{\textit{Recall} según SNR.}
+    \end{subfigure}
+    \caption{Evolución paramétrica del modelo DualStream-SlidingWindow frente a la SNR.}
+    \label{fig:res_sliding_snr}
+\end{figure}
+
+El mapa de calor (Figura \ref{fig:res_sliding_heatmap}) demuestra que la arquitectura retiene una probabilidad de detección del 100\% desde regímenes óptimos de potencia hasta rangos moderadamente severos (-2 dB de SNR).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figuras/capitulo5/DualStream-SlidingWindow/heatmap_snr_class.pdf}
+    \caption{Mapa de calor SNR vs Clase para el modelo DualStream-SlidingWindow.}
+    \label{fig:res_sliding_heatmap}
+\end{figure}
+
+
+\subsubsection{Quinta iteración: CFAR Dinámico (\textit{DualStream-DynamicSlidingWindow})}
+\label{subsubsec:res_dynamic}
+
+Se recuerda que a nivel de arquitectura e inferencia, este modelo es idéntico al modelo \textit{DualStream-SlidingWindow}. La diferencia estructural radica en que, durante el \textit{data augmentation}, esta variante ejecuta el detector basado en entropía sobre los datos degradados artificialmente, estimando la dispersión de ruido en cada subventana local de forma totalmente independiente.
+
+Como se ha evidenciado en las curvas Precision-Recall mostradas previamente, el umbral de decisión por defecto puede establecerse en valores restrictivos para priorizar la fiabilidad y limitar drásticamente la tasa de falsos positivos en la evaluación general del sistema. Sin embargo, en un sistema definitivo de detección, el clasificador no está estrictamente ligado a este punto de operación. La versatilidad de la arquitectura permite reconfigurar el sistema sin necesidad de reentrenamiento para adaptarlo a las necesidades de seguridad del entorno de despliegue. Ajustando el umbral de decisión con el que el modelo determina si una inferencia pertenece o no a la Clase Dron, se han derivado dos modos de funcionamiento diferenciados para evaluar este modelo definitivo:
+
+\paragraph{Modo de Alerta Temprana (Alta Sensibilidad)}\mbox{}\\[0.5em]
+
+En escenarios donde la prioridad absoluta sea la detección precoz de cualquier posible amenaza, asumiendo un mayor riesgo de falsas alarmas temporales, el umbral de decisión se puede reducir. Al relajar esta exigencia predictiva, el modelo incrementa notablemente su \textit{Recall}. Este modo es idóneo para perímetros abiertos extensos, donde una falsa alarma ocasional puede ser verificada mediante otros sensores complementarios (cámaras PTZ, acústica), pero un falso negativo prolongado supondría una vulnerabilidad inaceptable.
+
+La Figura \ref{fig:res_dynamic_global_as} ilustra el rendimiento de la red bajo este modo de configuración permisivo.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow_AS/confusion_matrix_local_AS.pdf}
+        \caption{Matriz de confusión.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow_AS/pr_curve_local_AS.pdf}
+        \caption{Curva Precision-Recall.}
+    \end{subfigure}
+    \caption{Rendimiento global del modelo definitivo \textit{DualStream-DynamicSlidingWindow} en Modo de Alerta Temprana.}
+    \label{fig:res_dynamic_global_as}
+\end{figure}
+
+Este modo exprime al límite la sensibilidad de la red neuronal. Gracias a que el modelo fue forzado a aprender asimilando el umbral físico local durante el entrenamiento, su capacidad analítica le permite mantener un altísimo \textit{Recall} (Figura \ref{fig:res_dynamic_snr_as}), sosteniendo simultáneamente una mejor gestión de los falsos positivos que la que hubiese logrado su versión homóloga (\textit{DualStream-SlidingWindow}) bajo un umbral equivalente.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow_AS/accuracy_snr_bars_local_AS.pdf}
+        \caption{\textit{Accuracy} según SNR.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow_AS/recall_snr_lines_local_AS.pdf}
+        \caption{\textit{Recall} según SNR.}
+    \end{subfigure}
+    \caption{Evolución paramétrica del modelo \textit{DualStream-DynamicSlidingWindow} (Modo Alerta Temprana) frente a la SNR.}
+    \label{fig:res_dynamic_snr_as}
+\end{figure}
+
+El mapa de calor en este modo permisivo (Figura \ref{fig:res_dynamic_heatmap_as}) constata que se retiene una alta capacidad para interceptar señales muy por debajo de la barrera de los 0 dB, capturando prácticamente todas las emisiones existentes.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow_AS/heatmap_snr_class_local_AS.pdf}
+    \caption{Mapa de calor SNR vs Clase para el modelo \textit{DualStream-DynamicSlidingWindow} en Modo Alerta Temprana.}
+    \label{fig:res_dynamic_heatmap_as}
+\end{figure}
+
+\clearpage
+\paragraph{Modo de Máxima Seguridad y Fiabilidad}\mbox{}\\[0.5em]
+
+Por el contrario, en entornos de alta saturación electromagnética (áreas urbanas densas) o cuando el sistema activa directamente contramedidas autónomas (como un \textit{jammer}), el coste de investigar o actuar ante una falsa alarma es excesivamente alto. En este caso, el sistema busca el punto de equilibrio más riguroso basándose en métricas restrictivas, maximizando el F1-Score y la especificidad. Aunque el \textit{Recall} asintótico pueda reducirse ligeramente en regímenes con mucho ruido, este umbral estricto asegura que prácticamente cualquier alerta notificada esté respaldada por una presencia real de dron.
+
+Al imponer este umbral estricto para certificar las detecciones, el impacto positivo del recálculo local de ruido se hace plenamente evidente en la métrica agregada documentada en la Figura \ref{fig:res_dynamic_global}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow/confusion_matrix_local.pdf}
+        \caption{Matriz de confusión.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow/pr_curve_local.pdf}
+        \caption{Curva Precision-Recall.}
+    \end{subfigure}
+    \caption{Rendimiento global del modelo definitivo \textit{DualStream-DynamicSlidingWindow} en Modo de Máxima Seguridad.}
+    \label{fig:res_dynamic_global}
+\end{figure}
+
+Los resultados de la evaluación local en este modo exhiben un F1-Score del 90.12\%. Aunque la mejora en el \textit{Recall} puro parece marginal respecto al modelo \textit{DualStream-SlidingWindow} configurado en su respectivo modo de seguridad, el análisis de degradación (Figura \ref{fig:res_dynamic_snr}) refleja una contención netamente superior a los falsos positivos.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow/accuracy_snr_bars_local.pdf}
+        \caption{\textit{Accuracy} según SNR.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow/recall_snr_lines_local.pdf}
+        \caption{\textit{Recall} según SNR.}
+    \end{subfigure}
+    \caption{Evolución paramétrica del modelo \textit{DualStream-DynamicSlidingWindow} (Modo Seguridad) frente a la SNR.}
+    \label{fig:res_dynamic_snr}
+\end{figure}
+
+La mejora clave se encuentra en la Especificidad. Al forzar a la red a asimilar el umbral físico exacto del entorno ventana a ventana, el modelo incrementa su Especificidad directa hasta el 97.10\%. Esto implica que el cálculo dinámico del ruido de fondo, visiblemente efectivo hasta entornos críticos en su mapa de calor (Figura \ref{fig:res_dynamic_heatmap}), dota a la arquitectura de una mayor protección frente al disparo de falsas alarmas, un requisito fundamental en sistemas de detección donde el coste de investigar positivos erróneos sea muy elevado.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figuras/capitulo5/DualStream-DynamicSlidingWindow/heatmap_snr_class_local.pdf}
+    \caption{Mapa de calor SNR vs Clase para el modelo \textit{DualStream-DynamicSlidingWindow} (CFAR Local) en Modo de Máxima Seguridad.}
+    \label{fig:res_dynamic_heatmap}
+\end{figure}
+
+% ==========================================
+% SECCIÓN 3: DISCUSIÓN
+% ==========================================
+\section{Discusión}
+\label{sec:discusion}
+
+\subsection{Comparativa Estructural frente a Glüge et al. (2024)}
+\label{subsec:disc_gluge}
+
+El análisis de las arquitecturas definitivas no puede desvincularse del estado del arte sobre el que se validan. El artículo de referencia sobre el que se fundamenta este trabajo, propuesto por Glüge et al. (2024) \cite{gluge_robust_2024}, instaura una metodología fuertemente dependiente del paradigma clásico de la visión artificial aplicada al espectro electromagnético. Su diseño exige que, tras interceptar las señales I/Q, se apliquen transformadas de Fourier consecutivas para extraer espectrogramas bidimensionales. Estas imágenes alimentan posteriormente a redes convolucionales profundas de la familia VGG\footnote{Las redes VGG (\textit{Visual Geometry Group}) son una familia de arquitecturas de red neuronal convolucional muy profundas, diseñadas originalmente para la clasificación de imágenes complejas, que logran una gran precisión a costa de emplear decenas de millones de parámetros entrenables.} (concretamente desde la VGG11 hasta la VGG19). Esta aproximación bidimensional acarrea un severo incremento en el tamaño de la red: sus modelos se alojan en una escala que parte de los 9.35 millones de parámetros entrenables para su red más ligera (VGG11) y alcanza los 20.16 millones en su versión más profunda (VGG19). Esta enorme dimensionalidad aumenta drásticamente los requisitos computacionales de memoria y la demanda energética del módulo, comprometiendo su uso en campo abierto.
+
+En contraste directo con esta premisa, la arquitectura \textit{DualStream-SlidingWindow} desarrollada en esta investigación prescinde del alto coste de procesamiento previo. Al evaluar directamente las series complejas unidimensionales junto a una estimación espectral directa, la red completa cuenta con exactamente 344,291 parámetros. Pese a esta radical reducción dimensional (entre 27 y 58 veces más ligera que las redes de referencia), los resultados empíricos demuestran una superioridad evidente en el procesamiento unidimensional y una paridad absoluta frente a las técnicas de visión artificial.
+
+Para ilustrar este hecho de forma explícita, la Figura \ref{fig:disc_gluge_comparative} presenta los resultados oficiales obtenidos en el estudio original de Glüge \textit{et al.}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{figuras/capitulo5/resultados_gluge.png}
+    \caption{Resultados de Balanced Accuracy reportados por Glüge \textit{et al.} (2024) comparando sus modelos VGG sobre espectrogramas 2D (SPEC, líneas continuas) frente a datos I/Q unidimensionales (IQ, líneas discontinuas).}
+    \label{fig:disc_gluge_comparative}
+\end{figure}
+
+Como se observa en dicha gráfica, sus modelos basados directamente en la señal I/Q unidimensional (representados mediante líneas discontinuas) sufren una degradación de rendimiento drástica a partir de los 0 dB. Sin embargo, al confrontar la evolución paramétrica de nuestro modelo definitivo (Figura \ref{fig:res_dynamic_snr}) frente a la suya, se comprueba que nuestra red 1D supera con gran margen a sus equivalentes unidimensionales. Además, nuestra arquitectura, que no requiere técnicas tradicionales de visión artificial y apenas alcanza los 344 mil parámetros, se mantiene totalmente a la par en rendimiento con sus grandes modelos bidimensionales sobre espectrogramas (líneas continuas), igualando la precisión y estabilizando una probabilidad de detección total para niveles de potencia superiores a -2 dB.
+
+Aún más determinante resulta analizar la naturaleza de los datos evaluados. Los autores del estudio original validaron sus arquitecturas aislando y pre-recortando vectores de señal muy cortos (16,384 muestras, equivalente a 1.2 ms), garantizando que siempre existía una ráfaga del dron en los datos de entrada. Esta estrategia eliminaba el problema estadístico más grave en los escenarios de saturación real: el ruido de etiqueta (\textit{label noise}). En contrapartida, el sistema propuesto en nuestro trabajo se ha visto obligado a inferir directamente sobre grabaciones completas de 75 ms, asumiendo la responsabilidad integral de detectar los escasos períodos activos del dron e ignorar los silencios dominados por la interferencia térmica.
+
+La relevancia de haber logrado esta robustez predictiva bajo condiciones mucho más adversas reside en su traslación tecnológica inmediata. Reducir los pesos de la red a apenas 344 mil parámetros elimina el cuello de botella computacional del enfoque en 2D. La capacidad de inferencia fluida en tiempo real posiciona a la arquitectura 1D como una solución diseñada nativamente para el ecosistema \textit{Edge AI}. Esto permite habilitar despliegues tácticos de contramedidas directamente sobre plataformas de radio definida por software (SDR) de bajo coste, un hito técnico y logístico que resultaría imposible de alcanzar si nos ciñéramos a las grandes exigencias de las redes VGG analizadas.
+
+\subsection{Análisis Global del Estado del Arte}
+\label{subsec:disc_sota}
+
+Para contextualizar de manera exhaustiva el alcance de la arquitectura de evaluación continua propuesta, la Tabla \ref{tab:sota_comparative} expone una matriz técnica enfrentando las propiedades del diseño frente a los repositorios de datos y algoritmos imperantes documentados en la literatura académica reciente.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l c c c c c}
+\toprule
+\textbf{Métrica / Capacidad} & \textbf{\cite{allahham_dronerf_2019}} & \textbf{\cite{zhao_drone_2024}} & \textbf{\cite{zheng_multi-scenario_2026}} & \textbf{\cite{gluge_robust_2024}} & \textbf{Este Trabajo} \\
+\midrule
+Conjunto de datos evaluado & DroneRF & UAVSig & DRFF-R2 & NoisyUAV v2 & NoisyUAV v2 \\
+Ruido interferente (Wi-Fi/BT) & No & No & Sí & Sí & \textbf{Sí} \\
+Evaluación en SNR extrema ($<0$ dB) & No & No & No & Sí & \textbf{Sí} \\
+Inclusión de clase exclusiva de ruido & No & Sí & Sí & Sí & \textbf{Sí} \\
+Inferencia sin pre-segmentación & No & No & No & No & \textbf{Sí} \\
+Mitigación adaptativa de ruido (CFAR) & No & No & No & No & \textbf{Sí} \\
+Dominio de entrada principal & I/Q & PSD / 2D & I/Q & PSD / 2D & \textbf{I/Q y PSD} \\
+Conservación de la fase compleja & Sí & No & Sí & No & \textbf{Sí} \\
+Algoritmo de clasificación & SVM / RF & CNN 2D & ViT / LLM & CNN 2D & \textbf{CV-CNN 1D} \\
+Tamaño del modelo (Parámetros) & Bajo & Alto & Alto & Muy alto ($>9$M) & \textbf{Bajo (344k)} \\
+Viabilidad para \textit{Edge AI} & Sí & No & No & No & \textbf{Sí} \\
+\bottomrule
+\end{tabular}
+\caption{Matriz comparativa de capacidades y restricciones entre la literatura contemporánea y el sistema propuesto.}
+\label{tab:sota_comparative}
+\end{table}
+
+La tabla refleja que el enfoque mayoritario en la comunidad científica centra sus validaciones sobre capturas limpias pre-segmentadas o bajo regímenes limitados por una buena relación señal a ruido. Las arquitecturas que sí abordan el problema bajo saturación (\cite{gluge_robust_2024}) asumen el sacrificio computacional de desechar la matriz temporal compleja I/Q en favor del tratamiento 2D clásico, descartando la información de fase y reduciendo su viabilidad para la inferencia móvil. El modelo propuesto en este trabajo ofrece una solución de compromiso donde se garantizan las exigencias críticas de detección requeridas por la defensa perimetral sin sobrepasar la capacidad de cómputo de procesadores embebidos de bajo consumo.

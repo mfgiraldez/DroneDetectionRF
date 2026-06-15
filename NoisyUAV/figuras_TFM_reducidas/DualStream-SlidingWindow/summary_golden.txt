@@ -1,0 +1,11 @@
+=================================================
+INFORME GOLDEN SET — DualStream-SlidingWindow
+=================================================
+Umbral Óptimo   : 0.8952
+Accuracy Global : 0.9105
+Recall (Drones) : 0.8504
+Precision       : 0.9666
+F1-Score        : 0.9048
+Average Prec    : 0.9599
+AUC-PR          : 0.9599
+=================================================

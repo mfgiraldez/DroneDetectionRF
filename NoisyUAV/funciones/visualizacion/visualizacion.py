@@ -11,6 +11,7 @@ import torch
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.gridspec as gridspec
+import scipy.signal as signal
 from typing import Optional, List, Tuple
 
 import sys
@@ -53,8 +54,8 @@ _ESTILO_PANEL = {
     "ytick.color": "#333333",             # Marcas Y
     "grid.color": "#bdc3c7",              # Rejilla gris claro
     "grid.alpha": 0.7,                    # Rejilla más suave
-    "grid.linestyle": "--",               # Rejilla punteada (estilo paper)
-    "font.family": "DeJavu Sans",               # Fuente con serifas (clásico de tesis/paper)
+    "font.family": "serif",               # Fuente con serifas (clásico de tesis/paper)
+    "font.serif": ["Times New Roman", "Times", "DejaVu Serif", "Nimbus Roman", "Georgia", "serif"],
     "font.size": 11,                      # Tamaño de letra ligeramente mayor
     "axes.titlesize": 13,                 # Títulos de gráficas
     "axes.titleweight": "bold",           # Títulos en negrita
@@ -128,17 +129,19 @@ def panel_completo(
     signal_complex = I + 1j * Q
 
     nombre_clase = NOMBRES_CLASES.get(target, f"Clase {target}")
-    es_dron = "RUIDO" if target == TARGET_NOISE else "DRON"
-    id_str = f" | Muestra #{sample_id}" if sample_id is not None else ""
-    titulo = f"{es_dron} — {nombre_clase} | SNR = {snr} dB{id_str}"
+    if target == TARGET_NOISE:
+        titulo = f"Ruido de Fondo — SNR = {snr} dB"
+    else:
+        titulo = f"Señal de Dron ({nombre_clase}) — SNR = {snr} dB"
 
     with plt.rc_context(_ESTILO_PANEL):
         fig = plt.figure(figsize=figsize)
+        # 3 columnas: Columna 0 (Time plots, width=40), Columna 1 (PSD, width=8), Columna 2 (Colorbar, width=1)
         gs = gridspec.GridSpec(
-            4, 2,
-            width_ratios=[50, 1],
-            height_ratios=[1, 1, 1.8, 1],
-            wspace=0.03,
+            3, 3,
+            width_ratios=[40, 8, 1],
+            height_ratios=[1, 1, 1.8],
+            wspace=0.06,
             hspace=0.35,
         )
         fig.suptitle(titulo, fontsize=15, fontweight="bold", y=0.96)
@@ -181,11 +184,6 @@ def panel_completo(
 
         ax_env.plot(t_sub, mag_sub, color="#2ecc71", linewidth=0.3, label="|I+jQ|")
 
-        # # Marcar posibles ráfagas: umbral adaptativo
-        # umbral = np.mean(magnitud) + 2 * np.std(magnitud)
-        # ax_env.axhline(y=umbral, color="#e74c3c", linestyle="--", linewidth=0.8,
-        #               alpha=0.7, label=f"Umbral detección ({umbral:.4f})")
-
         ax_env.set_ylabel("Magnitud")
         ax_env.set_title("2. Envolvente Temporal", fontsize=11)
         ax_env.legend(loc="upper right", fontsize=8)
@@ -214,28 +212,34 @@ def panel_completo(
         ax_spec.set_ylabel("Frecuencia (MHz)")
         ax_spec.set_title("3. Espectrograma STFT — Evolución Tiempo-Frecuencia", fontsize=11)
 
-        # Colorbar
-        cax = fig.add_subplot(gs[2, 1])
+        # ============================
+        # 4. PSD (Welch) — ALINEADA POR FRECUENCIA
+        # ============================
+        ax_psd = fig.add_subplot(gs[2, 1], sharey=ax_spec)
+        
+        # Calcular PSD usando Welch para poder rotar los ejes y alinear con el espectrograma
+        f_welch, Pxx_den = signal.welch(signal_complex, fs=fs, nperseg=nfft, return_onesided=False)
+        f_welch = np.fft.fftshift(f_welch)
+        Pxx_den = np.fft.fftshift(Pxx_den)
+        Pxx_db = 10 * np.log10(Pxx_den + 1e-12)
+
+        # Pintar la PSD: Potencia en eje X y Frecuencia en eje Y (evitando el color morado '#9b59b6' y usando carbón '#333333' neutro)
+        ax_psd.plot(Pxx_db, f_welch, color="#333333", linewidth=1.2)
+        ax_psd.set_xlabel("PSD (dB/Hz)")
+        ax_psd.set_title("4. PSD (Welch)", fontsize=11)
+        ax_psd.grid(True)
+
+        # Configurar límites y ticks compartidos de frecuencia
+        ax_psd.set_ylim([-fs/2, fs/2])
+        ax_psd.set_xlim([Pxx_db.min() - 5, Pxx_db.max() + 5])
+        plt.setp(ax_psd.get_yticklabels(), visible=False) # Ocultar etiquetas de frecuencia redundantes
+
+        # ============================
+        # 5. COLORBAR
+        # ============================
+        cax = fig.add_subplot(gs[2, 2])
         cbar = fig.colorbar(im, cax=cax)
         cbar.set_label("Potencia (dB/Hz)", fontsize=9)
-
-        # ============================
-        # 4. PSD (Welch)
-        # ============================
-        ax_psd = fig.add_subplot(gs[3, 0])
-        ax_psd.psd(
-            signal_complex,
-            NFFT=nfft,
-            Fs=fs,
-            color="#9b59b6",
-            linewidth=1.2,
-        )
-
-        ax_psd.xaxis.set_major_formatter(ticker.FuncFormatter(_fmt_mhz))
-        ax_psd.set_xlabel("Frecuencia (MHz)")
-        ax_psd.set_ylabel("Potencia (dB/Hz)")
-        ax_psd.set_title("4. Densidad Espectral de Potencia (PSD — Welch)", fontsize=11)
-        ax_psd.grid(True)
 
         # Primero empaquetamos todo para que las gráficas no colisionen entre sí
         fig.tight_layout()
@@ -277,7 +281,7 @@ def comparar_snr(
     if figsize is None:
         figsize = (16, 3.2 * n_rows)
 
-    nombre_clase = NOMBRES_CLASES.get(target, f"Clase {target}")
+    nombre_clase = "Ruido de Fondo" if target == TARGET_NOISE else NOMBRES_CLASES.get(target, f"Clase {target}")
 
     with plt.rc_context(_ESTILO_PANEL):
         fig, axes = plt.subplots(n_rows, 2, figsize=figsize)
@@ -395,7 +399,7 @@ def comparar_clases(
 
         for i, tgt in enumerate(targets):
             nombre = NOMBRES_CLASES.get(tgt, f"Clase {tgt}")
-            es_dron = "RUIDO" if tgt == TARGET_NOISE else "DRON"
+            label_y = "Ruido de Fondo" if tgt == TARGET_NOISE else f"Dron: {nombre}"
             color = _COLORES_CLASES.get(tgt, "#ffffff")
 
             try:
@@ -412,7 +416,7 @@ def comparar_clases(
                 )
                 ax_spec.xaxis.set_major_formatter(ticker.FuncFormatter(_fmt_ms))
                 ax_spec.yaxis.set_major_formatter(ticker.FuncFormatter(_fmt_mhz))
-                ax_spec.set_ylabel(f"{es_dron} {nombre}\nFreq (MHz)", fontsize=9)
+                ax_spec.set_ylabel(f"{label_y}\nFreq (MHz)", fontsize=9)
                 if i == n_rows - 1:
                     ax_spec.set_xlabel("Tiempo (ms)")
                 if i == 0:

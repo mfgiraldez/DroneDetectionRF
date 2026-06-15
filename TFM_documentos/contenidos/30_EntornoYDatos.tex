@@ -1,0 +1,449 @@
+\chapter{Marco Teórico y Metodología}
+\label{cap:MarcoTeorico}
+
+% \epigraph{La perfección no se alcanza cuando no hay nada más que añadir, sino cuando no hay nada más que quitar.}{Antoine de Saint-Exupéry}
+
+\lettrine[lraise=-0.1, lines=2, loversize=0.2]{E}{n} este capítulo se establece el marco teórico y metodológico sobre el que se sustenta la arquitectura de detección de esta investigación. En primer lugar, se define matemáticamente el modelo del sistema y la formulación del canal de radiofrecuencia, estableciendo los retos inherentes al régimen de baja relación señal a ruido (\textit{\gls{snr}}). A continuación, se detalla el conjunto de datos \textit{NoisyUAV v2}, analizando su estructura y sus características que lo hacen idóneo para la presente investigación. Sobre esta base, el capítulo desarrolla tres pilares metodológicos fundamentales: la justificación analítica del procesamiento directo de secuencias complejas I/Q frente a espectrogramas, el modelado del ruido de etiquetas dependiente de la dispersión temporal, y la formulación teórica tanto del preprocesamiento basado en entropía de Shannon como de las Redes Neuronales Convolucionales de Valores Complejos (\textit{\gls{cv-cnn}}) que constituyen el núcleo algorítmico del proyecto.
+
+\section{Modelo del Sistema y Formulación del Canal RF}
+\label{sec:modelo_sistema}
+El diseño de un sistema robusto de detección pasiva requiere, en primer lugar, una caracterización rigurosa del entorno electromagnético y de las señales involucradas. En este proyecto, se asume un escenario de monitorización donde un receptor de radio definida por \textit{software} \gls{sdr} escanea de forma continua la banda {\gls{ism}} de 2.4\,GHz.
+
+La señal captada por la antena receptora en el instante de tiempo $t$, denotada como $y(t)$, puede modelarse matemáticamente como la superposición de la emisión del objetivo, las alteraciones del canal y las emisiones espurias del entorno \cite{rout_novel_2025, ezuma_detection_2020}. En su representación de banda base equivalente, el modelo del sistema se define mediante la ecuación:
+
+\begin{equation}
+    y(t) = \big(h * x\big)(t) + i(t) + n(t)
+    \label{eq:modelo_sistema}
+\end{equation}
+
+Donde cada término representa una magnitud física discreta del canal inalámbrico:
+\begin{itemize}
+    \item $x(t)$ es la señal compleja en banda base transmitida por el \gls{uav} o su radiocontrol. Típicamente, estas señales emplean esquemas de modulación de espectro ensanchado por salto en frecuencia (\textit{\gls{fhss}}) para mitigar interferencias y evitar intercepciones.
+    \item $h(t)$ representa la respuesta al impulso compleja del canal físico en banda base equivalente. Este término compacta los fenómenos de atenuación por propagación (\textit{path loss}), rotación fasorial de fase y desvanecimiento destructivo/constructivo inter-símbolo, modelando las transformaciones que sufre la envolvente compleja de la señal antes de la etapa de digitalización en el receptor.
+    \item $i(t)$ representa la interferencia co-canal. Este término agrupa las emisiones de otros dispositivos coexistentes en la banda de interés, principalmente ráfagas de redes IEEE 802.11 (Wi-Fi) y Bluetooth \cite{ezuma_detection_2020}.
+    \item $n(t)$ modela el ruido térmico inherente a la electrónica del receptor, habitualmente caracterizado como ruido blanco gaussiano aditivo (\gls{awgn}) con media nula y varianza $\sigma_n^2$ \cite{lacy_machine_2024}.
+\end{itemize}
+
+Para su procesamiento digital en las arquitecturas de aprendizaje profundo, la señal analógica $y(t)$ es muestreada a una frecuencia $F_s$, obteniendo la secuencia discreta $y[n]$. Para preservar la coherencia de fase espacial y aislar las firmas electromagnéticas del transmisor (\textit{hardware impairments}), la señal se procesa directamente como un vector de valores complejos compuesto por sus componentes en fase ($I$) y en cuadratura ($Q$) \cite{valkama_blind_2005, zheng_deep_2025}:
+\begin{equation}
+    y[n] = y_I[n] + j y_Q[n]
+    \label{eq:iq_discreta}
+\end{equation}
+
+\subsection{Definición del régimen de baja Relación Señal a Ruido (\gls{snr})}
+El desafío fundamental abordado en este proyecto radica en la detección de la ráfaga $x(t)$ cuando su contribución energética es eclipsada por los términos $i(t)$ y $n(t)$. La Relación Señal a Ruido e Interferencia (Signal-to-Interference-plus-Noise Ratio, SINR), o de forma generalizada \gls{snr} en el contexto de conjuntos de datos contaminados, se define paramétricamente como:
+\begin{equation}
+    \text{SNR (dB)} = 10 \log_{10} \left( \frac{P_x}{P_i + P_n} \right)
+    \label{eq:snr_calculo}
+\end{equation}
+
+Donde $P_x$, $P_i$ y $P_n$ denotan las potencias medias de la señal de interés, la interferencia y el ruido térmico, respectivamente. Los detectores de energía clásicos y las arquitecturas de aprendizaje automático convencionales sufren una degradación de rendimiento severa cuando la \gls{snr} desciende por debajo de los 0\,dB, ya que la envolvente de la señal $y[n]$ se vuelve estadísticamente indistinguible de la distribución gaussiana del ruido \cite{lacy_machine_2024}.
+
+Como se detallará en las secciones posteriores, el objetivo de la metodología propuesta es extraer características no lineales directamente de los tensores I/Q descritos en la Ecuación \ref{eq:iq_discreta} para garantizar la detección en regímenes críticos donde $\text{SNR} < 0$\,dB (Grupo C), y explorar los límites del sistema en escenarios extremos.
+
+\section{El conjunto de datos NoisyUAV v2}
+\label{sec:dataset_noisyuav}
+
+Tras el análisis crítico de las alternativas, se ha seleccionado el conjunto de datos NoisyUAV v2 como el eje experimental de este proyecto. Esta base de datos se diseñó con el objetivo explícito de evaluar la robustez algorítmica en entornos de muy baja \gls{snr} y con interferencias reales.
+
+\textbf{Autores y artículo:} Glüge et al. (2024) \cite{gluge_robust_2024}.
+
+\textbf{Arquitectura de adquisición de RF:} captación realizada empleando una plataforma \gls{sdr} basada en componentes comerciales (COTS, \textit{Commercial Off-The-Shelf}), concretamente el USRP B205mini-i. Se operó a una frecuencia de muestreo ($F_s$) de 14\,MHz en la banda de 2.4\,GHz.
+
+\textbf{Volumen, topología y formato de los datos:} compone 17\,.744 grabaciones almacenadas como vectores analíticos I/Q. Cada archivo representa una ventana de observación continua de 75\,ms ($N = 1\,048\,576$ muestras). La taxonomía abarca seis modelos bajo distintos protocolos \gls{fhss} (DJI, Futaba, Graupner, Taranis, Turnigy) y una clase exclusiva de ruido empírico (Wi-Fi, Bluetooth, AWGN).
+
+\textbf{Análisis de la hostilidad electromagnética:} tal y como se ha detallado en el \ref{cap:estado_arte}, en la literatura actual, la separación en grupos a partir de los niveles de \gls{snr} de la señal IQ recibida suele ser similar independientemente de la fuente estudiada \cite{zheng_uavsignal_2025, gluge_robust_2024, vasant_ahirrao_rf-based_2024}. Este conjunto de datos permite cubrir todo el abanico de posibilidades, que se pueden separar en los distintos grupos que se muestran a continuación:
+\begin{itemize}
+    \item \textbf{Grupo A (\gls{snr} $\ge$ 6\,dB):} el caso óptimo, en tanto que la potencia es significativamente superior al suelo de ruido. Sin embargo, las interferencias presentan perfiles energéticos equiparables a las transmisiones de los drones, con características muy similares en el caso de los \textit{bursts} de Bluetooth.
+    \item \textbf{Grupo B ($0$\,dB $\le$ \gls{snr} $<$ 6\,dB):} complejidad moderada. En este rango de \gls{snr}, la coexistencia co-canal degrada la integridad fasorial de forma mucho más agresiva debido a que la señal de interés se encuentra muy enmascarada por el ruido de fondo y las interferencias existentes. Este rango de valores se considera la línea base para sistemas comerciales que realizan detecciones coherentes\footnote{Se denomina receptor coherente a sistema en el cual el receptor conoce cierta información de la señal que recibe, como por ejemplo la frecuencia portadora y la modulación utilizada en la etapa de transmisión} \cite{vasant_ahirrao_rf-based_2024, martelli_exploitation_2020}.
+    \item \textbf{Grupo C (-12\,dB $\le$ \gls{snr} $<$ 0\,dB):} en este entorno, los detectores clásicos basados en señales electromagnéticas son incapaces de cumplir su función. Esta es la razón principal de por qué la mayoría de investigaciones sobre el uso de técnicas basadas en \gls{ml}, \textit{Deep Learning} e IA se centran en este segmento de valores de relación señal a ruido. Como se ha visto en el \ref{cap:estado_arte}, la mayoría de soluciones se basan en el uso de modelos de visión artificial (CNN o modelos pre-entrenados como  variaciones de \textit{ResNet}) para alcanzar precisiones en torno al 80 \%. En esta investigación, se pretende llegar a valores similares sin tener que utilizar estas estructuras de visión artificial, por lo que este grupo será el eje central del estudio \cite{gluge_robust_2024}.
+    \item \textbf{Grupo D (\gls{snr} $<$ -12\,dB):} las detecciones comienzan a ser marginales, ocurriendo con muy baja reproducibilidad \cite{gluge_robust_2024}. La señal está completamente sepultada bajo el suelo de ruido del canal. Este grupo será usado como prueba para la robustez del sistema diseñado. 
+\end{itemize}
+
+\textbf{Justificación de la selección:} constituye el único conjunto de datos que satisface íntegramente los requisitos definidos. Los 14\,MHz de $F_s$ evitan la redundancia computacional, los 75\,ms continuos permiten el escaneo activo, y la presencia física de regímenes de \gls{snr} negativa garantiza una validación robusta de las arquitecturas propuestas.
+
+\subsection{Inspección del conjunto de datos seleccionado}
+
+Para comprender el escenario de detección, resulta fundamental analizar la naturaleza fasorial y espectral de las señales. Como detalla la Tabla \ref{tab:distribucion_muestras}, la distribución equitativa interclase permite un entrenamiento robusto.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Distribución de muestras en el conjunto de datos NoisyUAV v2.}
+\label{tab:distribucion_muestras}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Origen} & \textbf{ID clase} & \textbf{Muestras} & \textbf{$f_c$ (GHz)} & \textbf{$\Delta f$ (MHz)} & \textbf{Duración (ms)} \\ \midrule
+Dron DJI Phantom GL300F Pro & 0 & 1280 & 2.44175 & 1.2 & 2.18\\
+Dron Futaba T7C & 1 & 3472 & 2.44175 & 2.0 & 1.70\\
+Dron Futaba T14SG & 2 & 801 & 2.44175 & 3.1 & 1.40\\
+Graupner mx-16 & 3 & 801 & 2.44175 & 1.0 & 1.9/3.7\\
+Ruido & 4 & 8872 & - & - & - \\
+Dron Taranis ACCST & 5 & 1663 & 2.44000 & 1.5 & 3.1/4.4\\
+Dron Turnigy 9X & 6 & 855 & 2.44500 & 2.0 & 1.30\\ \bottomrule
+\textbf{Total} & & \textbf{17\,744} & & & \\ \bottomrule
+\end{tabular}
+}
+\end{table}
+
+\textbf{1. Variabilidad interclase y regímenes de operación:} un sistema robusto debe discriminar protocolos \gls{fhss} independientemente de la potencia recibida. La Figura \ref{fig:comparativa_clases_completa} ilustra el desvanecimiento morfológico de las ráfagas a medida que la \gls{snr} decae, dificultando la extracción de características basadas en umbrales de energía.
+
+\enlargethispage{1.5cm} % TRUCO 1: Alargamos el folio virtualmente 2 cm para que quepa la figura ampliada
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[b]{0.49\linewidth} % TRUCO 2: Aumentamos el ancho
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/comparacion_clase_28dB.png}
+        \caption{Régimen favorable (28\,dB).}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/comparacion_clase_10dB.png}
+        \caption{Régimen intermedio (10\,dB).}
+    \end{subfigure}
+
+    \vspace{0.3cm} 
+
+    \begin{subfigure}[b]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/comparacion_clase_0dB.png}
+        \caption{Régimen moderado (0\,dB).}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/comparacion_clase_-12dB.png}
+        \caption{Régimen crítico ($-12$\,dB).}
+    \end{subfigure}
+    
+    % \vspace{-0.2cm} % Pegamos el texto del pie a las figuras
+    \caption{Comparación por clase en función de la degradación progresiva de la relación señal a ruido.}
+    \label{fig:comparativa_clases_completa}
+\end{figure}
+
+% \FloatBarrier % Tu barrera se mantiene intacta
+
+\textbf{2. Análisis multidominio de la degradación:} para ilustrar el impacto físico del ruido térmico, la Figura \ref{fig:degradacion_target0_total} expone la evolución del \textit{Target 0} en los dominios fasorial (I/Q), temporal (envolvente) y tiempo-frecuencia (espectrograma y PSD). Esta transición evidencia la paulatina corrupción de la señal a medida que la \gls{snr} baja.
+
+% \enlargethispage{2cm} % Damos margen vertical extra por si al ensanchar crecen mucho a lo alto
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[b]{0.495\linewidth} % Apuramos al máximo el ancho de la columna
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target0_30db.png}
+        \caption{\textit{Target 0} a 30\,dB.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target0_0db.png}
+        \caption{\textit{Target 0} a 0\,dB.}
+    \end{subfigure}
+
+    \vspace{0.3cm} % Reducimos un poco el espacio central
+
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target0_-12db.png}
+        \caption{\textit{Target 0} a $-12$\,dB.} % He corregido el signo menos matemático aquí
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target0_-20db.png}
+        \caption{\textit{Target 0} a $-20$\,dB.} % He ajustado el texto al nombre del archivo (-20dB)
+    \end{subfigure}
+    \caption{Evolución multidominio de la clase objetivo 0 en función del nivel de ruido del canal.}
+    \label{fig:degradacion_target0_total}
+\end{figure}
+
+% \clearpage % Este comando es un muro absoluto: empuja todo lo que venga debajo a la página siguiente
+
+\textbf{3. Caracterización de las interferencias y falsos positivos:} la Figura \ref{fig:degradacion_ruido_total} detalla el comportamiento espectral de la clase correspondiente a ruido e interferencia. Se observa cómo, a niveles altos de \gls{snr}, las ráfagas espurias Wi-Fi presentan firmas energéticas que son susceptibles de provocar falsos positivos en algoritmos clásicos de detección pasiva.
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target4_30db.png}
+        \caption{Clase ruido a 30\,dB.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target4_12db.png}
+        \caption{Clase ruido a 12\,dB.}
+    \end{subfigure}
+
+    \vspace{0.3cm} % Espacio reducido para compensar el aumento de altura
+
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target4_0db.png}
+        \caption{Clase ruido a 0\,dB.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.495\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figuras/seccion3/ej_dataset_target4_-12db.png}
+        \caption{Clase ruido a $-12$\,dB.}
+    \end{subfigure}
+    \caption{Análisis de las emisiones interferentes y ruido de fondo a distintos regímenes de potencia.}
+    \label{fig:degradacion_ruido_total}
+\end{figure}
+
+\section{Justificación del Procesamiento Directo I/Q frente a Representaciones de Tiempo-Frecuencia}
+\label{sec:justificacion_procesamiento_IQ}
+
+El paradigma predominante en la literatura reciente orientada a la clasificación de señales electromagnéticas mediante aprendizaje profundo, tal y como se detalla en el Capítulo \ref{cap:estado_arte}, se fundamenta en la proyección de la serie temporal unidimensional hacia una representación bidimensional en el dominio tiempo-frecuencia. En este contexto, el estimador de densidad espectral más empleado es el espectrograma \cite{gluge_robust_2024, zhao_drone_2024}. Matemáticamente, es una matriz que se computa evaluando la magnitud al cuadrado de la Transformada de Fourier de Tiempo Corto (\textit{\gls{stft}}). Ésta constituye una extensión de la Transformada de Fourier en Tiempo Discreto (\textit{\gls{dtft}}) que permite analizar señales no estacionarias cuyas propiedades espectrales varían en el tiempo. La idea fundamental consiste en segmentar la señal en fragmentos temporales de una longitud determinada mediante una función de ventana $w[n]$ (Rectangular, Hanning, Hamming y Blackman son las más usadas \cite{zhang_window, harris_window}), aplicar la transformada a cada segmento de forma independiente y organizar los espectros resultantes en una matriz bidimensional. Formalmente, para una señal discreta $y[n]$, su espectrograma $S[m,k]$ se define como:
+\begin{equation}
+    S[m,k] = \left| \sum_{n=0}^{N_w-1} y[n+mH] w[n] e^{-j\frac{2\pi}{N_w}kn} \right|^2
+    \label{eq:espectrograma}
+\end{equation}
+En esta ecuación, $m$ representa el índice de la trama temporal y $k$ es el \textit{bin}\footnote{Un \textit{bin} de frecuencia representa cada uno de los intervalos discretos en los que se divide el espectro continuo de la señal al aplicar la \gls{dtft}. Su anchura ($\Delta f$) determina la resolución frecuencial, es decir, el tamaño mínimo en frecuencia que tiene el sistema.} de frecuencia. El término $w[n]$ denota la función de la ventana aplicada, $N_w$ determina la longitud de dicha ventana, y el parámetro $H$ rige el desplazamiento temporal discreto entre segmentos consecutivos. Este último factor controla de manera unívoca la tasa de solapamiento de las ventanas, dictando la resolución temporal del estimador frente a la evolución transitoria de la señal. Cabe destacar que la resolución combinada de esta matriz queda estrictamente sujeta al principio de incertidumbre de Heisenberg-Gabor: ventanas largas ofrecen alta resolución frecuencial pero baja resolución temporal, y viceversa \cite{oppenheim_discrete_2014}.
+
+La motivación analítica que subyace a esta transformación espacial radica en la posibilidad de tratar la matriz espectral resultante como una imagen digital fotométrica. Este isomorfismo permite importar e implementar arquitecturas de redes neuronales convolucionales que fueron concebidas para tareas de reconocimiento de imágenes. En dicho marco teórico, el propósito de las capas de convolución es recorrer la matriz espacial bidimensional para identificar jerarquías de características topológicas, asimilando las variaciones de densidad espectral a gradientes espaciales, bordes o patrones de textura visual. 
+
+No obstante, la asimilación conceptual de una señal de radiofrecuencia a un mapa de píxeles carece de rigor físico, induciendo deficiencias estructurales en el modelo. Concretamente, la adopción del espectrograma como bloque de entrada impone tres limitaciones fundamentales que comprometen severamente la detección en regímenes donde la relación señal a ruido desciende por debajo de los 0\,dB:
+
+\begin{itemize}
+    \item \textbf{Destrucción de la coherencia de fase:} la operación del valor absoluto en la Ecuación \ref{eq:espectrograma} descarta la fase instantánea de la señal. En regímenes críticos ($\text{SNR} \le -6$\,dB), las transiciones de fase inherentes a la modulación y las firmas de \textit{hardware} de los osciladores locales (\textit{RF fingerprinting}) constituyen discriminantes estadísticamente vitales frente al ruido gaussiano que resultan irrecuperables tras la transformación espectral \cite{zheng_deep_2025}.
+    \item \textbf{Límite de Heisenberg-Gabor:} la STFT está sujeta al principio de incertidumbre tiempo-frecuencia, que establece un compromiso ineludible: una alta resolución frecuencial (ventanas largas) diluye los bordes transitorios de las ráfagas \gls{fhss}, mientras que una alta resolución temporal (ventanas cortas) ensancha artificialmente el espectro, incrementando el solapamiento con interferencias co-canal \cite{oppenheim_discrete_2014}.
+    \item \textbf{Complejidad espacial y carga computacional:} la proyección de una serie temporal unidimensional hacia una cuadrícula bidimensional tiempo-frecuencia supone un aumento directo de la cantidad de parámetros entrenables en los modelos \cite{alam_rf-enabled_2023}. En una arquitectura CNN 2D convencional, el número de operaciones de multiplicación-acumulación (MAC) escala de forma cuadrática con el tamaño del núcleo o \textit{kernel} convolucional ($K \times K$). Para preservar la resolución de una señal muestreada a 14\,MHz (como es el caso de las señales del conjunto de datos seleccionado), los espectrogramas resultantes exigen tensores de entrada de dimensiones muy altas. En contraste, el procesamiento de la secuencia en banda base permite el uso de convoluciones unidimensionales, cuya complejidad lineal ($\mathcal{O}(N \cdot K)$) reduce drásticamente el consumo de memoria y los tiempos de inferencia \cite{zheng_deep_2025}, habilitando el despliegue del modelo en equipos alojados en el borde sin sacrificar capacidad de representación \cite{cai_toward_2024, zhang_edge_2023}.
+\end{itemize}
+
+Por consiguiente, la metodología de este proyecto descarta las representaciones espectrales destructivas y aboga por el procesamiento directo de las secuencias analíticas I/Q. Al inyectar el tensor complejo $y[n] = y_I[n] + j y_Q[n]$ directamente en la red neuronal, se delega en los núcleos convolucionales la tarea de aprender una base de filtrado adaptativa que supera los límites matemáticos de la STFT y preserva la integridad fasorial.
+
+\section{Impacto de la Dispersión Temporal en la Corrupción de Etiquetas (\textit{Label Noise})}
+\label{sec:label_noise}
+
+La naturaleza no licenciada de la banda \gls{ism} de 2.4\,GHz induce un entorno electromagnético regido por la coexistencia estocástica de múltiples emisores asíncronos, predominantemente ráfagas de banda ancha (e.g., IEEE 802.11) y de banda estrecha (e.g., IEEE 802.15.1) \cite{ezuma_detection_2020}. En el paradigma de adquisición del conjunto de datos \textit{NoisyUAV v2}, cada registro fasorial abarca una ventana de observación macroscópica de $T_{\text{obs}} = 75$\,ms. 
+
+La inyección directa de secuencias de 75\,ms ($N \approx 10^6$ muestras) supone una carga computacional muy alta y agrava la ceguera del modelo frente a señales débiles. Esto se debe a que la información útil representa una fracción minúscula del tensor, el cual queda invariablemente dominado por el ruido térmico y las interferencias co-canal.
+
+Para cuantificar matemáticamente este fenómeno, resulta imperativo definir el ciclo de trabajo empírico de los protocolos \gls{fhss} dentro de la ventana de observación $T_{\text{obs}} = 75$\,ms. La ocupación espacial máxima de la señal objetivo dentro del vector analítico se calcula como el cociente porcentual entre el tiempo activo total y la duración de la ventana, de acuerdo con la siguiente expresión:
+
+\begin{equation}
+    \text{Ocupación máxima (\%)} = \frac{N_{\text{burst}} \cdot \max(T_{\text{burst}})}{T_{\text{obs}}} \times 100
+    \label{eq:ocupacion_maxima}
+\end{equation}
+
+Donde $N_{\text{burst}}$ representa el número de ráfagas estimadas presentes en una captura continua para un controlador específico, y $\max(T_{\text{burst}})$ denota la duración temporal de dichas ráfagas. Aplicando la Ecuación \ref{eq:ocupacion_maxima} a los datos paramétricos de la Tabla \ref{tab:distribucion_muestras} y a la inspección física de las tasas de salto de frecuencia reales, se obtienen las métricas de ocupación temporal para cada modelo documentado en el conjunto de datos, tal y como se detalla en la Tabla \ref{tab:ocupacion_temporal}.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Ciclo de trabajo empírico y ocupación temporal máxima por modelo en una ventana de observación de 75\,ms.}
+\label{tab:ocupacion_temporal}
+\resizebox{0.9\linewidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+\textbf{Dron / Controlador} & \textbf{Ráfagas estimadas ($N_{\text{burst}}$)} & \textbf{Duración máxima $\max(T_{\text{burst}})$ (ms)} & \textbf{Ocupación máxima (\%)} \\ \midrule
+Turnigy 9X & 6 & 1.30 & 10.40\% \\
+Taranis ACCST & 2 & 4.40 & 11.73\% \\
+Graupner mx-16 & 2 & 3.70 & 9.86\% \\
+Futaba T14SG & 2 & 3.10 & 8.26\% \\
+DJI Phantom GL300F & 2 & 2.18 & 5.81\% \\
+Futaba T7C & 2 & 2.00 & 5.33\% \\ \bottomrule
+\end{tabular}
+}
+\end{table}
+
+A partir de los resultados expuestos, se observa que la cota superior de ocupación (el escenario más favorable para la detección) corresponde al modelo Taranis ACCST. Este dispositivo transmite, de media, dos ráfagas en la ventana de grabación y cuenta con transitorios de mayor extensión temporal, alcanzando una ocupación máxima del 11.73\,\%. Resulta pertinente señalar que, incluso para el modelo Turnigy 9X, el cual presenta una tasa de salto significativamente mayor (6 ráfagas por ventana), su reducida duración individual ($1.30$\,ms) sitúa su ocupación temporal en un 10.40\,\%.
+
+En consecuencia, incluso en el escenario analítico que asume la máxima ocupación temporal posible, más del 88.27\,\% del tensor (aproximadamente $925\,574$ muestras complejas) carece de información perteneciente a la clase objetivo. Este vasto subespacio temporal está constituido exclusivamente por el suelo de ruido térmico o por las ya mencionadas ráfagas espurias procedentes de redes Wi-Fi y Bluetooth coexistentes en la banda de interés.
+
+Metodológicamente, a esta serie temporal compleja de longitud $N = 1\,048\,576$ muestras se le asigna una etiqueta estática global $\tilde{y} \in \mathcal{Y}$, asumiendo de manera implícita la invariancia de la clase objetivo durante todo el intervalo de integración \cite{gluge_robust_2024}. En regímenes asintóticos de alta relación señal a ruido ($\text{SNR} \gg 0$\,dB), la densidad espectral de potencia de la señal modulada del \gls{uav} ($P_x$) domina el tensor de observación frente al umbral de interferencia ($P_i$) y al suelo de ruido térmico ($P_n$). En este caso, la etiqueta global $\tilde{y}$ constituye una cota inferior representativa de la variable aleatoria latente, garantizando que cualquier sistema de reconocimiento de patrones asocie de forma unívoca la topología de la señal con la firma electromagnética del dron. Sin embargo, cuando el canal opera en condiciones de degradación alta ($\text{SNR} < 0$\,dB), el límite físico de la transmisión sitúa a $P_x$ por debajo de la suma de la interferencia y el ruido térmico ($P_x < P_i + P_n$). Consecuentemente, el vector de observación queda dominado en el dominio de la probabilidad por la superposición de emisiones espurias y la varianza del proceso gaussiano (AWGN).
+
+Al proyectar la totalidad de la secuencia temporal sobre la función de coste de un algoritmo de clasificación bajo la premisa de que toda la ventana de 75\,ms se corresponde con la clase del UAV, se induce una corrupción sistemática en el proceso de optimización. Este fenómeno, formalizado en la teoría del aprendizaje estadístico como ruido de etiquetas dependiente de la instancia (\textit{instance-dependent label noise}) \cite{frenay_classification_2014, song_learning_2022}, provoca una divergencia severa entre la distribución de probabilidad condicional observada y la verdadera distribución física subyacente en la señal discreta:
+
+\begin{equation}
+    P(\tilde{y} = k \mid \mathbf{x}, y = c) \neq \delta_{kc}
+    \label{eq:label_noise}
+\end{equation}
+
+Donde $k$ es la etiqueta nominal estática del conjunto de datos, $c$ representa la fuente electromagnética verdaderamente dominante en el subespacio temporal evaluado, $\mathbf{x} \in \mathbb{C}^N$ es el tensor fasorial de entrada, y $\delta_{kc}$ denota la delta de Kronecker.
+
+Para cuantificar el impacto de esta asimetría probabilística en la convergencia del estimador, es necesario analizar el principio de Minimización del Riesgo Empírico (\textit{Empirical Risk Minimization}, ERM) formulado en la Teoría del Aprendizaje Estadístico \cite{vapnik_nature_1998}. Sea un estimador estadístico parametrizado por $\theta$, su objetivo teórico es minimizar el riesgo esperado $R(\theta)$ sobre la verdadera distribución conjunta subyacente $P(\mathbf{x}, y)$:
+
+\begin{equation}
+    R(\theta) = \mathbb{E}_{P(\mathbf{x}, y)} \left[ \mathcal{L}(f_\theta(\mathbf{x}), y) \right]
+    \label{eq:riesgo_teorico}
+\end{equation}
+
+Donde $\mathcal{L}$ denota una función de pérdida estándar (e.g., entropía cruzada) y $f_\theta(\mathbf{x})$ es la predicción del modelo. Sin embargo, debido a la corrupción de las etiquetas en el dominio temporal extenso, el algoritmo no tiene acceso a la distribución limpia $P(\mathbf{x}, y)$, sino a una distribución empírica ruidosa $\tilde{P}(\mathbf{x}, \tilde{y})$. Por consiguiente, el optimizador minimiza un riesgo empírico corrupto $\tilde{R}(\theta)$:
+
+\begin{equation}
+    \tilde{R}(\theta) = \frac{1}{M} \sum_{i=1}^{M} \mathcal{L}(f_\theta(\mathbf{x}_i), \tilde{y}_i)
+    \label{eq:riesgo_empirico}
+\end{equation}
+
+Bajo la presencia del ruido de etiquetas dependiente de la instancia formulado en la Ecuación \ref{eq:label_noise}, se demuestra teóricamente que el riesgo empírico constituye un estimador sesgado del riesgo verdadero, cumpliéndose la desigualdad fundamental $\mathbb{E}[\tilde{R}(\theta)] \neq R(\theta)$ \cite{natarajan_learning_2013, song_learning_2022}. Durante la fase de entrenamiento o ajuste paramétrico, la minimización irrestricta de la Ecuación \ref{eq:riesgo_empirico} fuerza a los parámetros $\theta$ a alinear su espacio de decisión con las características morfológicas de mayor energía presentes en la señal. Al procesar iterativamente tensores $\mathbf{x}$ gobernados por transmisiones que, en este contexto, se consideran espurias (como tramas \gls{ofdm} de Wi-Fi) emparejados artificialmente con la etiqueta de un dron ($\tilde{y} = \text{Dron}$), cualquier estimador estadístico converge hacia un mínimo local igualmente espurio. El algoritmo colapsa su capacidad de generalización al asimilar los patrones de las interferencias como características discriminantes primarias de la clase objetivo, lo que se conoce en el ámbito del aprendizaje automático como \textit{feature shortcutting} o también \textit{shortcut learning}, invalidando por completo la inferencia en el límite del ruido. Esta limitación inherente al \textit{ground truth} del conjunto de datos condicionará el diseño algorítmico posterior, exigiendo la implementación de estrategias avanzadas para la mitigación de ruido de etiquetas durante el modelado.
+
+Por consiguiente, el primer paso en la arquitectura del sistema consiste en formular un mecanismo de segmentación temporal agnóstico. Este preprocesamiento no evalúa la naturaleza del emisor, sino que se limita a rastrear la serie temporal discreta para extraer las regiones de interés (\textit{\gls{roi}}) basándose en anomalías energéticas y estadísticas. Aislar los transitorios electromagnéticos del ruido de fondo permite transformar la ventana macroscópica en tensores focalizados, paso previo y estrictamente necesario antes de abordar la clasificación y la mitigación de la corrupción de etiquetas.
+
+\section{Detección Analítica de Ráfagas \gls{fhss} mediante Entropía Espectral de Shannon}
+\label{sec:detector_entropia}
+
+Tal y como se ha formalizado en la Sección~\ref{sec:label_noise}, la detección en el límite del ruido térmico exige un mecanismo de segmentación temporal previo al clasificador. Este preprocesador no evalúa la naturaleza del emisor, sino que rastrea la serie temporal para aislar las regiones de interés con concentración espectral anómala. En el contexto de los protocolos \gls{fhss}, este requisito puede satisfacerse de forma analítica explotando una propiedad fundamental de la información de Shannon \cite{zhang_entropy-based_1989}: la entropía espectral de la señal observada cae bruscamente en el instante exacto de una transmisión activa.
+
+A diferencia de los detectores de energía convencionales, basados en la comparación de la potencia total integrada frente a un umbral fijo, el enfoque propuesto opera sobre la distribución de la energía en el dominio de la frecuencia. Este principio ha sido aplicado en trabajos previos sobre análisis espectral de señales de drones y \gls{uav}s \cite{morge-rollet_drone_2022, li_dim_2025}, y constituye la base del detector implementado en esta investigación. Los parámetros que determinan el funcionamiento de este bloque funcional no se ajustan de forma automática, ya que esto supondría una fase de entrenamiento adicional que arrastraría todos los problemas comentados en secciones anteriores, en lugar de ser una herramienta de apoyo al modelo implementado. En este contexto, se trata de un algoritmo determinista, cuyas constantes de operación se derivan analíticamente del estudio realizado sobre el conjunto de datos seleccionado, de las estadísticas del ruido gaussiano presente en él y de la geometría espectral de las distintas transmisiones \gls{fhss} identificadas.
+
+\subsection{Fundamento físico: entropía como medida de concentración espectral}
+\label{subsec:fundamento_entropia}
+
+Considérese la representación tiempo-frecuencia de la señal discreta $y[n]$ obtenida mediante la {\gls{stft}}, definida en la Ecuación~\ref{eq:espectrograma}. Para cada instante temporal $m$, se dispone de un vector de densidad espectral de potencia $\mathbf{P}_m = \{P_{k,m}\}_{k=0}^{N-1}$ de longitud $N$ \textit{bins} de frecuencia. La distribución de probabilidad espectral normalizada en el \textit{frame} $m$ se define como:
+
+\begin{equation}
+    p_{k,m} = \frac{P_{k,m}}{\displaystyle\sum_{k=0}^{N-1} P_{k,m}}, \quad \forall k \in \{0, \ldots, N-1\}
+    \label{eq:prob_espectral}
+\end{equation}
+
+A partir de ella, la entropía de Shannon en bits por \textit{frame} temporal se computa como:
+
+\begin{equation}
+    H(m) = -\sum_{k=0}^{N-1} p_{k,m} \cdot \log_2\!\left(p_{k,m}\right)
+    \label{eq:entropia_shannon}
+\end{equation}
+
+Esta magnitud posee dos propiedades analíticas directamente explotables para la detección:
+
+\begin{itemize}\itemsep 0em
+    \item \textbf{Máximo de entropía (ruido blanco):} cuando la energía se distribuye de forma uniforme en todos los \textit{bins} (distribución espectral plana, característica del ruido blanco gaussiano), la distribución $\{p_{k,m}\}$ converge a la distribución uniforme y la entropía alcanza su cota superior teórica: $H_{\max} = \log_2(N)$ bits \cite{cover_elements_2006}. Para $N = 2048$ \textit{bins}, $H_{\max} = 11$ bits.
+
+    \item \textbf{Mínimo de entropía (transmisión activa):} durante un salto de frecuencia \gls{fhss}, la energía se concentra en uno o pocos \textit{bins} de la portadora activa, reduciendo la distribución efectiva a un soporte mínimo. En ese instante, $H(m) \ll H_{\max}$, generando un mínimo local en la curva temporal $\{H(m)\}$ que señala inequívocamente la presencia de una ráfaga. Esta propiedad ha sido formalmente caracterizada como test de hipótesis para la detección de señales correladas en presencia de ruido blanco gaussiano aditivo \cite{zhang_entropy-based_1989}.
+\end{itemize}
+
+La idea intuitiva es directa: el ruido térmico informa en todos los \textit{bins} simultáneamente (máxima incertidumbre), mientras que el salto de frecuencia concentra la información en un subespacio reducido (mínima incertidumbre). El detector explota esta asimetría sin requerir conocimiento previo alguno sobre el protocolo, la frecuencia portadora ni la modulación empleada por el transmisor.
+
+\subsubsection{Blanqueo espectral: la mejora clave frente a la entropía estándar}
+\label{subsubsec:whitening}
+
+La estimación directa de la entropía sobre el periodograma empírico obtenido mediante la \gls{stft} adolece de una degradación sistemática originada por la falta de planicidad espectral del canal de comunicaciones. Fenómenos como el desvanecimiento selectivo en frecuencia impuesto por el medio de propagación, las tolerancias de los osciladores y la respuesta en frecuencia no ideal de las distintas cadenas de filtros del receptor \gls{sdr} introducen alteraciones energéticas localizadas en intervalos espectrales específicos \cite{tandra_snr_2008}. Estas variaciones determinísticas inducen una entropía base inferior a la cota teórica de máxima incertidumbre $H_{\max}$, incrementando la varianza temporal del estimador y comprometiendo la detectabilidad de las ráfagas transmitidas en regímenes de baja \gls{snr}.
+
+La solución implementada es el blanqueo espectral: antes de calcular la entropía, cada \textit{bin} se normaliza por su mediana\footnote{En estadística, la mediana muestral se prefiere frente a la media aritmética por su elevado punto de ruptura (se conoce como punto de ruptura o de quiebre de un estimador como la proporción de observaciones incorrectas que puede manejar antes de proporcionar un resultado incorrecto) del 50\,\%. En nuestro escenario, las transmisiones de alta energía (los saltos \gls{fhss} o ráfagas WiFi) actúan como valores atípicos (conocidos en el ámbito del \textit{Machine Learning} como \textit{outliers}) temporales. Con el uso de la media, estas ráfagas elevarían artificialmente el nivel de referencia del \textit{bin}, sesgando la normalización y atenuando el contraste de los saltos más débiles. La mediana permanece inalterada frente a estos eventos, estimando de forma insesgada el verdadero suelo de ruido siempre que la ocupación del canal no supere la mitad de la ventana temporal.} de potencia a lo largo del eje temporal:
+
+\begin{equation}
+    \tilde{P}_{k,m} = \frac{P_{k,m}}{\tilde{P}_{k}^{\text{med}}}, \qquad \tilde{P}_{k}^{\text{med}} = \operatorname{mediana}_{m}\!\left(P_{k,m}\right)
+    \label{eq:whitening}
+\end{equation}
+
+Esta operación normaliza el ruido blanco a una potencia espectral unitaria en todos los \textit{bins}, independientemente de la forma espectral del canal. En regímenes de \gls{snr} favorables o moderadamente adversos, la aparición de un salto \gls{fhss} provoca que los \textit{bins} de la portadora activa superen de manera clara el nivel de referencia blanqueado, amplificando el contraste de la caída de entropía frente a la línea de base. Sin embargo, a medida que la señal se degrada hacia escenarios de \gls{snr} muy desfavorables (en torno a $-14$\,dB), la energía del salto queda progresivamente enmascarada por la varianza del ruido térmico, provocando que el decremento de entropía sea sutil o marginal, pero notable. El vector de entropía blanqueada, empleado en el resto del \textit{pipeline}, se calcula sustituyendo $P_{k,m}$ por $\tilde{P}_{k,m}$ en las Ecuaciones~\ref{eq:prob_espectral} y~\ref{eq:entropia_shannon}.
+
+\subsection{Parámetros de la \gls{stft} y Resolución Tiempo-Frecuencia}
+\label{subsec:parametros_stft}
+
+La \gls{stft} se evalúa sobre la señal compleja en banda base $s[n] = y_I[n] + j\,y_Q[n]$ con ventana bilateral, preservando el espectro de frecuencias negativas necesario para representar la asimetría espectral de las señales en banda base compleja \cite{oppenheim_discrete_2014}. El parámetro de diseño fundamental es la longitud de la ventana de análisis $N_w$, que controla el equilibrio tiempo-frecuencia conforme al principio de incertidumbre de Heisenberg-Gabor:
+
+\begin{equation}
+    \Delta f = \frac{F_s}{N_w}, \qquad \Delta t \approx \frac{N_w}{2 F_s}
+    \label{eq:resolucion_stft}
+\end{equation}
+
+Para el conjunto de datos \textit{NoisyUAV v2}, con $F_s = 14$\,MHz, el valor adoptado es $N_w = 2048$, que proporciona una resolución frecuencial de $\Delta f \approx 6.84$\,kHz/\textit{bin} y una resolución temporal de $\Delta t \approx 0.073$\,ms/\textit{frame}. Esta elección satisface simultáneamente dos requisitos físicos: la resolución temporal es suficiente para perfilar con precisión los flancos de transmisión de las ráfagas \gls{fhss} más cortas registradas en el conjunto de datos ($\approx 0.44$\,ms), y la resolución frecuencial permite resolver individualmente los \textit{bins} portadores de los saltos, cuyo ancho de banda en los protocolos de radiocontrol es del orden de los megahercios \cite{morge-rollet_drone_2022}.
+
+\vspace{\baselineskip}
+
+Para ilustrar empíricamente esta superioridad analítica, la Figura \ref{fig:ed_vs_entropy_cfar} presenta una evaluación comparativa frente a una captura del conjunto de datos operando en régimen crítico (\gls{snr}~=~$-14$\,dB). En el espectrograma superior se han identificado un total de seis transmisiones: cuatro correspondientes a saltos de frecuencia del \gls{uav} marcadas en color rojo (anotaciones 1 a 4), una ráfaga de Bluetooth en color morado (anotación 5) y una trama Wi-Fi en color negro (anotación 6). 
+
+Al aplicar un algoritmo \textit{\gls{cfar}} adaptativo sobre el perfil de potencia, el detector de energía (panel central) se ve limitado por el enmascaramiento que causa el ruido térmico sumado a las interferencias: detecta únicamente las emisiones interferentes de alta potencia (Bluetooth y Wi-Fi) y omite por completo las firmas del \gls{uav}, cuya energía se encuentra por debajo del umbral del ruido de fondo. Por el contrario, el mecanismo propuesto basado en entropía espectral (panel inferior) logra segmentar con precisión tanto los cuatro saltos del dron como la ráfaga Bluetooth debido a su alta concentración frecuencial. Asimismo, ignora la emisión Wi-Fi, ya que su gran ancho de banda presenta una distribución espectral plana asimilable al ruido y no produce una caída de entropía significativa.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figuras/seccion3/ed_vs_entropy_cfar_edit.pdf}
+    \caption{Comparativa entre el detector de energía y el detector de entropía espectral propuesto ante un entorno de baja relación señal a ruido y con coexistencia de interferencias de banda estrecha (Bluetooth) y banda ancha (Wi-Fi).}
+    \label{fig:ed_vs_entropy_cfar}
+\end{figure}
+
+\section{Redes Neuronales Convolucionales de Valores Complejos (CV-CNN)}
+\label{sec:cvcnn}
+
+Para posibilitar el aprendizaje profundo directo sobre la señal I/Q en banda base, es necesario superar las limitaciones de las arquitecturas neuronales convencionales, diseñadas intrínsecamente para operar en el dominio de los números reales $\mathbb{R}$. Una señal de radiofrecuencia modulada se representa analíticamente como una secuencia discreta de números complejos $s[n] = I[n] + j Q[n]$, donde la magnitud $|s[n]|$ codifica la amplitud de la envolvente y el argumento $\angle s[n]$ codifica la fase instantánea. Separar la señal en dos canales reales independientes, canal en fase (I) y en cuadratura (Q), y procesarlos mediante convoluciones reales estándar rompe la coherencia matemática bidimensional, impidiendo que la red capture las rotaciones de fase acopladas que caracterizan a los esquemas de modulación y a las firmas de \textit{hardware} de los transmisores.
+
+Para resolver este desafío, la arquitectura propuesta para el clasificador, que se detallará en capítulos posteriores, se fundamenta en Redes Neuronales Convolucionales de Valores Complejos (\gls{cv-cnn}) \cite{bassey_survey_2021}. En una \gls{cv-cnn}, tanto los tensores de entrada como los pesos entrenables de los núcleos de convolución pertenecen al cuerpo de los complejos $\mathbb{C}$.
+
+\subsection{Aritmética de Convolución Compleja}
+
+La operación de convolución compleja entre un tensor de entrada $z = x_R + j x_I$ y un filtro convolucional $W = W_R + j W_I$ se define algebraicamente garantizando la propiedad distributiva de la multiplicación compleja:
+
+\begin{equation}
+    W \ast z = (W_R \ast x_R - W_I \ast x_I) + j(W_R \ast x_I + W_I \ast x_R)
+    \label{eq:convolucion_compleja}
+\end{equation}
+
+Esta formulación fuerza a la arquitectura a modelar explícitamente el acoplamiento cruzado entre la fase y la cuadratura. En términos de implementación en librerías de cálculo tensorial modernas, esta operación se simula instanciando dos capas de convolución real independientes (una para $W_R$ y otra para $W_I$) y sumando de forma cruzada sus salidas, lo que preserva la semántica fasorial de la propagación hacia delante (\textit{forward pass}), que precede al cálculo del gradiente durante el entrenamiento.
+
+La justificación física de este acoplamiento radica en la propia naturaleza de las modulaciones electromagnéticas. Los esquemas de transmisión digital contemporáneos, tales como la Modulación de Amplitud en Cuadratura (QAM) o la Modulación por Desplazamiento de Fase (PSK), codifican los símbolos de información manipulando geométricamente el argumento y la envolvente del fasor de banda base \cite{hirose_complex_2012}. Si el receptor procesara los componentes I y Q como canales de color independientes en una red real convencional, se destruiría la relación topológica inherente a la rotación de fase. La convolución compleja, regida por la Ecuación \ref{eq:convolucion_compleja}, obliga al tensor de pesos $W$ a rotar y escalar el tensor de entrada $z$ preservando las transformaciones afines bidimensionales, evitando así que la red tenga que "reaprender" desde cero las correlaciones de fase puramente geométricas impuestas por el transmisor.
+
+Adicionalmente, desde una perspectiva puramente paramétrica, la aritmética compleja actúa como un poderoso regularizador estructural. Una capa convolucional real bidimensional que procese $N$ mapas de características de entrada y produzca $M$ mapas de salida mediante filtros espaciales de dimensión $K \times K$ requiere $N \cdot M \cdot K^2$ parámetros entrenables. Para simular el procesamiento de una señal I/Q, una red neuronal real necesitaría tratar I y Q como canales separados, requiriendo $(2N) \cdot (2M) \cdot K^2 = 4 \cdot N \cdot M \cdot K^2$ pesos. En contraste, una capa convolucional compleja equivalente \cite{trabelsi_deep_2018} opera con pesos $W \in \mathbb{C}$ que constan únicamente de dos escalares reales ($W_R, W_I$), resultando en $2 \cdot N \cdot M \cdot K^2$ grados de libertad \cite{hirose_complex_2012}. Esta reducción a la mitad del espacio de parámetros restringe severamente la capacidad del modelo para memorizar ruido gaussiano, confiriendo a la red una resistencia superior al sobreajuste (\textit{overfitting}) cuando opera bajo regímenes críticos de baja relación señal a ruido.
+
+\subsection{Retropropagación y el Cálculo de Wirtinger}
+
+El entrenamiento de una red neuronal requiere calcular el gradiente de la función de pérdida con respecto a cada peso de la arquitectura. En el dominio complejo, la función de pérdida $\mathcal{L}(z)$ asigna un tensor complejo a un error escalar real, es decir, $\mathcal{L}: \mathbb{C} \rightarrow \mathbb{R}$. Sin embargo, según el análisis complejo clásico, una función real de variable compleja no cumple las ecuaciones de Cauchy-Riemann, por lo que no es estrictamente holomorfa (derivable en el sentido complejo) \cite{khan_historic_2025}.
+
+Esta limitación analítica se sortea aplicando el Cálculo de Wirtinger \cite{bouboulis_extension_2011}. Este formalismo matemático permite tratar a la variable compleja $z$ y a su conjugada $z^*$ como variables reales algebraicamente independientes. Esto redefine el gradiente complejo para el proceso más importante en el entrenamiento de un modelo de \gls{ml}: la retropropagación (también llamada \textit{backpropagation}), como se muestra en la Ecuación \ref{eq:wirtinger}
+
+\begin{equation}
+    \nabla_{W} \mathcal{L} = \frac{\partial \mathcal{L}}{\partial W_R} + j \frac{\partial \mathcal{L}}{\partial W_I} = 2 \frac{\partial \mathcal{L}}{\partial W^*}
+    \label{eq:wirtinger}
+\end{equation}
+
+Esta propiedad asegura que el descenso de gradiente complejo (\gls{cgd}) apunte siempre en la dirección de máxima pendiente de la superficie de error, garantizando la convergencia del entrenamiento de la \gls{cv-cnn} bajo las mismas garantías topológicas que sus contrapartes reales.
+
+El dilema de la retropropagación en el cuerpo de los complejos surge de una restricción ineludible impuesta por la definición matemática del error. Cualquier función de pérdida empírica $\mathcal{L}$ debe devolver una métrica de divergencia escalar puramente real ($\mathcal{L}: \mathbb{C}^n \rightarrow \mathbb{R}$) para poder ser minimizada. El análisis complejo dicta que las únicas funciones que cumplen simultáneamente esta condición y las ecuaciones de Cauchy-Riemann son las funciones constantes \cite{bouboulis_extension_2011}. Dado que una función de pérdida constante imposibilita el aprendizaje, se concluye formalmente que ninguna función de coste útil es holomorfa. En consecuencia, el marco teórico de la derivada compleja clásica fracasa al intentar evaluar la sensibilidad del error respecto a los pesos de la red.
+
+El Cálculo de Wirtinger resuelve esta discontinuidad analítica relajando la condición de holomorfismo \cite{bouboulis_extension_2011}. Al tratar $z$ y $z^*$ como entidades algebraicas independientes, permite extender el operador derivada hacia dominios no analíticos. En la fase de retropropagación a través de las sucesivas capas convolucionales y densas, el error se propaga invirtiendo la topología de la Ecuación \ref{eq:convolucion_compleja} mediante la regla de la cadena de Wirtinger. Para una función de coste $\mathcal{L}$ y una transformación interna $f(z)$, el gradiente retropropagado se ramifica en dos derivadas parciales ortogonales:
+
+\begin{equation}
+    \frac{\partial \mathcal{L}}{\partial z} = \frac{\partial \mathcal{L}}{\partial f} \frac{\partial f}{\partial z} + \frac{\partial \mathcal{L}}{\partial f^*} \frac{\partial f^*}{\partial z}
+    \label{eq:regla_cadena_wirtinger}
+\end{equation}
+
+Una vez computado el gradiente conjugado $\nabla_{W^*} \mathcal{L}$ para cada núcleo convolucional de la red, la etapa de actualización paramétrica (paso de optimización) se consolida mediante la iteración de Descenso de Gradiente Complejo (CGD). En este paso, el tensor de pesos matriciales en la iteración o época $t$ se desplaza en el espacio de Hilbert iterando en la dirección opuesta al vector normal de máximo crecimiento local, gobernado por la tasa de aprendizaje $\eta$:
+
+\begin{equation}
+    W_{t+1} = W_t - \eta \nabla_{W^*} \mathcal{L}
+    \label{eq:complex_gradient_descent}
+\end{equation}
+
+Esta formulación rigurosa de la retropropagación compleja \cite{bouboulis_extension_2011} es el pilar que permite optimizar sistemas con millones de parámetros directamente en banda base, sin requerir aproximaciones empíricas subóptimas y preservando la linealidad del mapeo interno frente a las alteraciones del canal físico electromagnético.
+
+\subsection{Normalización y Activaciones no Lineales}
+
+Al igual que en las redes reales, las arquitecturas profundas requieren estabilización de las distribuciones internas. Para ello, se emplea una normalización compleja por lotes, conocida como \gls{cbn}. En esta investigación, debido a la alta carga computacional y la inestabilidad numérica de la normalización covariante estricta \cite{trabelsi_deep_2018}, se optó por una normalización diagonal, estabilizando la varianza de la parte real e imaginaria de manera simétrica pero computacionalmente eficiente.
+
+En cuanto a las funciones de activación, el teorema de Liouville establece que la única función analítica acotada en todo el plano complejo es una constante, imposibilitando el uso de funciones de activación doblemente holomorfas en redes profundas. Para superar esto, se emplea la función de activación \gls{crelu}, que aplica la no linealidad ReLU estándar de forma independiente a los canales reales e imaginarios:
+
+\begin{equation}
+    \operatorname{CReLU}(z) = \max(0, \operatorname{Re}(z)) + j \max(0, \operatorname{Im}(z))
+    \label{eq:crelu}
+\end{equation}
+
+Esta elección ha demostrado empíricamente ser la más robusta y estable para el procesamiento de series temporales electromagnéticas \cite{bassey_survey_2021}, previniendo los problemas de escalado asociados a variantes basadas en la fase (modReLU o zReLU).
+
+Al final de la etapa de extracción de características complejas, y justo antes del clasificador completamente conectado final (una red neuronal \textit{Fully Connected}), el tensor de variables se proyecta al dominio real $\mathbb{R}$ extrayendo el módulo fasorial ($|z| = \sqrt{\operatorname{Re}(z)^2 + \operatorname{Im}(z)^2}$). De este modo, la red entrega al clasificador vectorial una abstracción altamente dimensional pero estrictamente real, reteniendo las propiedades estructurales que la rama compleja extrajo del acoplamiento I/Q.
+
+La elección de una normalización diagonal frente a la covariante exige una justificación desde el paradigma de la eficiencia computacional. La Normalización Compleja por Lotes (Complex Batch Normalization) estricta modela las características internas de la red como una distribución bivariante correlacionada \cite{trabelsi_deep_2018}. Ello implica calcular y actualizar dinámicamente la matriz de covarianza de dimensión $2 \times 2$ entre las partes real e imaginaria de cada canal para cada muestra del lote, además de computar su raíz cuadrada matricial inversa (inversa de Cholesky) para aplicar la transformación de blanqueo a los tensores. Al someter el clasificador a tensores de $1\,048\,576$ muestras capturados a muy alta frecuencia, el cuello de botella aritmético de la covarianza estricta hace que el tiempo de entrenamiento resulte demasiado elevado. La relajación propuesta asume ortogonalidad estadística local, estabilizando y centrando las varianzas reales e imaginarias por separado. Esta simplificación, aunque subóptima teóricamente, acelera un orden de magnitud la propagación por capa asegurando, en la práctica, un límite de desvanecimiento de gradiente plenamente operativo.
+
+En lo concerniente a las activaciones no lineales, la literatura propone alternativas teóricas a la función CReLU (Ecuación \ref{eq:crelu}), destacando especialmente las funciones fundamentadas en la manipulación exclusiva de la magnitud o de la fase, como es el caso de \textit{modReLU} o \textit{zReLU}. Sin embargo, al operar sobre señales electromagnéticas altamente dispersivas en condiciones de muy baja relación señal a ruido, el componente de fase del tensor en profundidad suele presentar fluctuaciones gaussianas que inducen saltos numéricos caóticos al atravesar discontinuidades polares. La elección empírica de CReLU, que actúa armónicamente como un par de diodos rectificadores ideados sobre los planos ortogonales cartesianos \cite{trabelsi_deep_2018}, previene la saturación del gradiente y proporciona una respuesta invariante frente a rotaciones puras, consolidándose como el estándar \textit{de facto} para la discriminación espectral robusta \cite{bassey_survey_2021}.
+
+Por último, la proyección final al dominio real mediante el módulo fasorial, mencionada previamente, no constituye un simple paso de dimensionalidad, sino que dota a la arquitectura de invarianza rotacional \cite{hirose_complex_2012}. En todo receptor inalámbrico real no colaborativo, existe un error residual (\textit{frequency offset}) entre el oscilador de referencia del dron y el oscilador del receptor en tierra. Esta falta de sincronización se traduce matemáticamente en una rotación constante y progresiva de la constelación fase-cuadratura. Al descartar selectivamente el ángulo absoluto en la última capa de extracción abstracta ($|z e^{j\phi}| = |z|$), la red neuronal garantiza que su diagnóstico final no se vea perturbado por la orientación estocástica del diagrama polar durante la captura, consolidando la superioridad predictiva del modelo frente a los canales RF no ideales.
+
+\section{Síntesis del Marco Teórico y Decisiones de Diseño}
+\label{sec:sintesis_cap3}
+
+A lo largo de este capítulo se han sentado las bases analíticas y metodológicas que condicionan el diseño del sistema propuesto. Las distintas secciones han seguido una línea argumental deliberadamente encadenada: cada conclusión motiva el siguiente paso de diseño.
+
+En primer lugar, la formulación del modelo del canal RF (Sección~\ref{sec:modelo_sistema}) ha permitido caracterizar matemáticamente el entorno de detección: una señal de \gls{uav} $x(t)$ que llega al receptor degradada por el canal $h(t)$, enmascarada por interferencias co-canal $i(t)$ y sumergida en ruido térmico $n(t)$. Este modelo establece que el problema es fundamentalmente un problema de detección en presencia de ruido e interferencia no gaussiana, lo que invalida de entrada las hipótesis sobre las que se apoyan los detectores de energía clásicos.
+
+A continuación, el análisis del conjunto de datos NoisyUAV v2 (Sección~\ref{sec:dataset_noisyuav}) ha cuantificado la magnitud real del problema: incluso en el escenario más favorable, la señal del \gls{uav} ocupa como máximo el 11.73\,\% de la ventana de observación de 75\,ms. El 88\,\% restante del tensor de entrada está dominado por ruido y emisiones espurias. Este hecho condena a cualquier arquitectura que procese la ventana entera sin discriminación temporal a minimizar una función de coste corrompida, tal y como se ha formalizado mediante el concepto de ruido de etiquetas dependiente de la instancia (Sección~\ref{sec:label_noise}).
+
+La justificación del procesamiento directo I/Q (Sección~\ref{sec:justificacion_procesamiento_IQ}) descarta las representaciones espectrales destructivas al demostrar que la operación de valor absoluto de la \gls{stft} elimina la coherencia de fase, que es precisamente el discriminante estadístico más robusto frente al ruido térmico en regímenes de \gls{snr} negativa.
+
+Por último, el detector analítico de ráfagas basado en entropía espectral de Shannon (Sección~\ref{sec:detector_entropia}) cierra el marco metodológico proponiendo la solución al problema de segmentación temporal: un algoritmo determinista, sin parámetros entrenables, capaz de localizar los transitorios electromagnéticos de los protocolos \gls{fhss} explotando la caída de incertidumbre espectral que toda transmisión activa produce. Las mejoras del blanqueo espectral (Sección~\ref{subsubsec:whitening}) y la elección razonada de los parámetros de la \gls{stft} completan el preprocesador. La comparativa empírica incluida al final del capítulo confirma que, ante un escenario real de \gls{snr}~=~$-14$\,dB con coexistencia de interferencias, este mecanismo localiza los cuatro saltos del \gls{uav} allí donde el detector de energía \gls{cfar} fracasa por completo.
+
+Las decisiones metodológicas adoptadas en este capítulo —procesamiento I/Q directo, segmentación temporal basada en entropía y parametrización analítica del preprocesador— constituyen los cimientos sobre los que se articulan las arquitecturas de aprendizaje profundo descritas en el capítulo siguiente.

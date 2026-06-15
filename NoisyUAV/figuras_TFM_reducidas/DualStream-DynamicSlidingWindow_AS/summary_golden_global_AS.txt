@@ -1,0 +1,9 @@
+=================================================
+INFORME GOLDEN SET — DualStream-DynamicSlidingWindow (global CFAR) (Alta Sensibilidad)
+=================================================
+Umbral AS       : 0.7500
+Accuracy Global : 0.8269
+Recall (Drones) : 0.9049
+Precision       : 0.7828
+F1-Score        : 0.8394
+=================================================

@@ -21,24 +21,37 @@ from NoisyUAV.funciones.dsp_rf.detector_entropia import detectar_bursts
 GOLDEN_CSV = r"C:\TFM_data\NoisyUAV\ground_truth_test_set.csv"
 DATA_DIR   = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CKPT_PATH  = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\checkpoints\best_model.pth"
-OUT_DIR    = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden"
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--local_cfar', action='store_true', help='Usar CFAR local sobre cada ventana de 9.4ms')
+args, _ = parser.parse_known_args()
+
+GLOBAL_CFAR = not args.local_cfar
+if GLOBAL_CFAR:
+    OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden_global"
+else:
+    OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\figuras_golden_per_window"
 FS = 14e6
 WIN_LEN = 131072
 N_STEPS = 16  # Número de ventanas deslizantes
 
-def calculate_phys_features(iq_tensor):
+def calculate_phys_features(iq_tensor, adaptive_window_ms):
     """ Calcula las 3 features que espera el modelo V2.1 """
     try:
-        _, _, H_smooth, _, nf_v, _, _, bursts = detectar_bursts(
+        _, _, H_smooth, _, nf_v, ns, _, bursts = detectar_bursts(
             iq_tensor, fs=FS, nperseg=2048,
-            adaptive_window_ms=15.0, min_burst_ms=0.3, z_thresh=2.5
+            adaptive_window_ms=adaptive_window_ms, min_burst_ms=0.3, z_thresh=2.5
         )
         global_nf = float(np.median(nf_v))
         global_H  = float(np.mean(H_smooth))
-        z_peak    = 0.0
+        
         if bursts:
-            b0 = max(bursts, key=lambda b: abs(b['z_peak']))
-            z_peak = float(np.clip(abs(b0['z_peak']), 0, 30))
+            z_peak = max([abs(b['z_peak']) for b in bursts])
+        else:
+            # FALLBACK ANALÍTICO: Si no detecta ráfaga, usar la desviación máxima
+            z_peak = (np.min(H_smooth) - global_nf) / (ns + 1e-10)
+            
+        z_peak = float(np.clip(abs(z_peak), 0, 30))
         return [global_nf, global_H, z_peak]
     except Exception:
         return [0.0, 0.0, 0.0]
@@ -72,6 +85,11 @@ def evaluate_golden():
             iq_full = d['x_iq'].float()
             max_idx = iq_full.shape[1]
 
+            if GLOBAL_CFAR:
+                # 1. Features Físicas Globales (75ms para evitar auto-enmascaramiento)
+                phys_vals = calculate_phys_features(iq_full, adaptive_window_ms=15.0)
+                phys_tensor = torch.tensor([phys_vals], dtype=torch.float32).to(device)
+
             # Sliding Window
             step = (max_idx - WIN_LEN) // (N_STEPS - 1)
             max_prob = 0.0
@@ -80,10 +98,11 @@ def evaluate_golden():
                 start = i * step
                 end = start + WIN_LEN
                 win = iq_full[:, start:end]
-
-                # Features Físicas
-                phys_vals = calculate_phys_features(win)
-                phys_tensor = torch.tensor([phys_vals], dtype=torch.float32).to(device)
+                
+                if not GLOBAL_CFAR:
+                    # 1. Features Físicas Locales (9.4ms)
+                    phys_vals = calculate_phys_features(win, adaptive_window_ms=0.0)
+                    phys_tensor = torch.tensor([phys_vals], dtype=torch.float32).to(device)
 
                 # Normalización RMS
                 power = win.pow(2).mean().clamp(min=1e-12).sqrt()

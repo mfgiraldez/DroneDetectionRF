@@ -35,8 +35,8 @@ def apply_ieee_style():
         'lines.linewidth': 2.0,
         'lines.markersize': 6,
         
-        'font.family': 'sans-serif',
-        'font.sans-serif': ['Arial', 'DejaVu Sans', 'Helvetica', 'sans-serif'],
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman', 'Times', 'DejaVu Serif', 'Nimbus Roman', 'Georgia', 'serif'],
         'text.color': '#222222',
         'axes.labelcolor': '#222222',
         'xtick.color': '#222222',

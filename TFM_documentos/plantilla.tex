@@ -1,0 +1,240 @@
+\chapter{Instrucciones de uso de la plantilla}
+
+\epigraph{La perfección no se alcanza cuando no hay nada más que añadir, sino cuando no hay nada más que quitar.}{Antoine de Saint-Exupéry}
+
+\lettrine[lraise=-0.1, lines=2, loversize=0.2]{E}{sta} nueva plantilla nace con el fin de ofrecer una versión simplificada del formato de publicaciones de la ETSi tratando de respetar en la mayor medida posible su estética y usabilidad, pero priorizando la velocidad de compilación para poder utilizarse con editores web como Overleaf, tan populares en la actualidad, pero que presentan limitaciones de cómputo significativas.
+
+Este capítulo presenta sus posibles usos. De momento, la plantilla sólo está disponible para Trabajos Fin de Grado o Máster. 
+A fecha de redacción de este documento, está preparada para ser compilada con \textit{pdflatex}, y ha sido probada en TeX Live 2025 tanto en local como en Overleaf.
+
+\section{Estructura básica del documento}
+
+Los documentos en \LaTeX{} presentan dos partes diferenciadas: 
+\begin{itemize}\itemsep 0em
+    \item El \textbf{preámbulo} le permite definir la clase del documento (en este caso, \textit{etsibook}, los paquetes a utilizar, y la personalización de la portada, entre otros. Abarca todo el contenido hasta la sentencia \lstinline|\begin{document}|.
+    \item El \textbf{cuerpo} incluye los contenidos de su documento encerrados entre \lstinline|\begin{document}| y \lstinline|\end{document}|.
+\end{itemize}
+
+En el código fuente de esta plantilla encontrará comentarios, precedidos por el carácter \lstinline|%|, que le guiarán en la personalización del documento. Adicionalmente, a continuación se presenta brevemente las diferentes posibilidades de la plantilla.
+
+\subsection{El preámbulo}
+
+El preámbulo comienza con la instrucción \lstinline|\|\lstinline|documentclass{etsibook}[opciones]|, que le permite personalizar algunas características básicas del documento: tamaño de la fuente, geometría del documento, etc. Para los trabajos Fin de Grado o Máster se recomienda mantener los valores por defecto (fuente a 10pt, y formato A4).
+
+A continuación, el usuario puede incluir los paquetes que necesite para la elaboración del documento con la sentencia \lstinline|\usepackage{paquete}[opciones]|. Es recomendable incluir sólo aquellos paquetes imprescindibles para mejorar los tiempos de compilación del documento. Por ejemplo, si no necesita incluir fragmentos de código, comente la importación del paquete \textit{listings} anteponiendo el carácter \lstinline|%| a la línea \lstinline|\usepackage{listings}|. 
+
+El siguiente bloque del preámbulo le permite definir la portada del documento y sus metadatos. Para ello, la plantilla ofrece los siguientes comandos:
+\begin{lstlisting}[language=tex, caption={Bloque de personalización de la portada}]
+\header{Trabajo Fin de Grado\\%
+  Grado en Ingeniería XXX}
+\title{Escuela Técnica Superior de Ingeniería: Formato de Publicación para Overleaf}
+\author{Nombre Apellidos}
+\authorlabel{Autor}
+\director{Tutor}{Nombre Apellidos}{Categoría} 
+\date{Sevilla, 2025}
+\affiliation{Dpto. de Ingeniería XXX\\%
+        Escuela Técnica Superior de Ingeniería\\%
+        Universidad de Sevilla}
+\optlogo{etsi/logo-dpto-placeholder.pdf} 
+\end{lstlisting}
+
+En general basta con cambiar estos valores por defecto para adecuarlos a su documento: titulación, título del documento, nombre y apellidos del autor y tutores. Algunas consideraciones son:
+\begin{itemize}\itemsep 0em
+    \item La instrucción \lstinline|\director| puede incluirse varias veces si tiene varios directores.
+    \item La orden \lstinline|\optlogo| es opcional y le permite incluir un segundo logotipo en la portada. Puede comentar esta línea si no la utiliza.
+    \item Puede incluir saltos de línea con \lstinline|\\| si lo necesita.
+    \item Si uno de los campos presenta un texto muy largo, puede anteponer \lstinline|\smaller{}| a su texto para reducir ligeramente el tamaño de la fuente.
+\end{itemize}
+
+Finalmente puede personalizar otros comandos o paquetes. Por ejemplo, esta plantilla prepara el glosario utilizando el paquete \lstinline|glossaries|.
+
+\subsection{El cuerpo}
+
+El cuerpo del documento incluye sus contenidos entre las órdenes \lstinline|\begin{document}| y \lstinline|\end{document}|. En él, se distinguen cuatro bloques principales: 
+\begin{itemize}\itemsep 0em
+    \item La \textbf{cubierta}, que se construye con la orden \lstinline{\maketitle} y debe ser lo primero en el cuerpo del documento.
+    \item El \textbf{contenido preliminar} (agradecimientos, resumen, \textit{abstract}, etc.), que se debe incluir tras la orden \lstinline{\frontmatter}, ya que este comando establece una numeración especial. En este bloque, los capítulos deben comenzarse con la orden \lstinline{\addchap} para que no se numeren pero aparezcan en el índice.
+    \item El \textbf{contenido principal} del documento, que debe incluirse tras la orden \lstinline{\mainmatter} que vuelve a personalizar la numeración, el formato de la cabecera y del pie de página. En este bloque, los capítulos deben comenzarse con la orden \lstinline{\chapter}.
+    \item El \textbf{contenido final} (índices de figuras, anexos, etc.) debe ubicarse tras la orden \lstinline{\backmatter}.
+\end{itemize}
+
+\section{Catálogo de estilos}
+
+Esta sección muestra los principales elementos tipográficos disponibles de la plantilla, a modo de catálogo visual y didáctico. De este modo, puede comparar el código \LaTeX{} usado para reproducir el elemento. 
+
+\subsection{Formato de texto}
+
+El texto ordinario se escribe directamente en el cuerpo del documento, sin ningún comando especial. Para aplicar estilos básicos, \LaTeX{} dispone de los siguientes comandos de la Tabla \ref{tab:formato}.
+
+\begin{table}[htbp]
+\caption{Comandos de formato de texto}\label{tab:formato}
+\vspace{0.1cm}
+\centering
+\begin{tabular}{lll}
+\hline
+\textbf{Comando} & \textbf{Resultado} & \textbf{Uso} \\
+\hline
+\lstinline|\textbf{}| & \textbf{negrita} & Énfasis fuerte \\
+\lstinline|\textit{}| & \textit{cursiva} & Resalto, términos extranjeros \\
+\lstinline|\texttt{}| & \texttt{monoespaciado} & Código, rutas de fichero \\
+\lstinline|\emph{}|   & \emph{énfasis}   & Énfasis contextual \\
+\lstinline|\underline{}| & \underline{subrayado} & Usar con moderación \\[0.05cm] 
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection*{Tamaños de fuente}
+
+La plantilla define el tamaño de fuente base en las opciones de la clase. Es posible variar el tamaño localmente con los siguientes comandos (de menor a mayor):
+
+\begin{center}
+{\tiny tiny} \quad {\scriptsize scriptsize} \quad {\footnotesize footnotesize} \quad {\small small} \quad {\normalsize normalsize} 
+
+{\large large} \quad {\Large Large} \quad {\LARGE LARGE} 
+
+{\huge huge} \quad {\Huge Huge}
+\end{center}
+
+Además, la plantilla incluye los comandos relativos \lstinline|\larger{}| y \lstinline|\smaller{}| para ajustes finos en la portada, aunque también pueden usarse en el texto si fuera necesario.
+
+\subsection{Estructura del texto}
+
+\subsubsection*{Epígrafe}
+
+Puede iniciar un capítulo con un epígrafe usando el comando \lstinline|\epigraph{}{}|, tal como se muestra al comienzo de este capítulo.
+
+\subsubsection*{Letra capital (\textit{lettrine})}
+
+\lettrine[lraise=-0.1, lines=2, loversize=0.2]{E}{l} inicio de un capítulo puede destacarse con una letra capital decorativa usando el paquete \textit{lettrine}. Los parámetros de \lstinline{\lettrine} permiten configurar el número de líneas y el tamaño de la letra, entre otros.
+
+\subsubsection*{Notas al pie}
+
+Las notas al pie de página se insertan de forma sencilla con el comando \lstinline|\footnote{}|, directamente en el punto del texto donde se quiere insertar la llamada\footnote{Esta es una nota al pie de ejemplo.}.
+
+\subsection{Listas}
+
+Se han personalizado los siguientes tipos de lista. Las no numeradas, mediante el entorno \lstinline{itemize}:
+\begin{itemize}\itemsep 0em
+    \item Primer elemento de la lista.
+    \item Segundo elemento de la lista.
+    \item Tercer elemento, con un subnivel:
+    \begin{itemize}
+        \item Primer subelemento.
+        \item Segundo subelemento.
+    \end{itemize}
+\end{itemize}
+
+Y las numeradas, usando el entorno \lstinline{enumerate}:
+\begin{enumerate}\itemsep 0em
+    \item Primer paso del procedimiento.
+    \item Segundo paso del procedimiento.
+    \item Tercer paso, que a su vez se divide en:
+    \begin{enumerate}
+        \item Primera sub-tarea.
+        \item Segunda sub-tarea.
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Ecuaciones}
+
+Las expresiones matemáticas se escriben con el paquete \textit{amsmath}. Puede incluir matemáticas en línea encerrando la expresión entre signos de dólar, por ejemplo: la transformada de Fourier es $F(\omega) = \int_{-\infty}^{\infty} f(t)\,e^{-j\omega t}\,dt$.
+
+\subsubsection*{Ecuación numerada}
+
+El entorno \textit{equation} produce una ecuación numerada y centrada:
+
+\begin{equation}
+    E = mc^{2}
+    \label{eq:einstein}
+\end{equation}
+
+\subsubsection*{Sistema de ecuaciones (\textit{align})}
+
+El entorno \textit{align} permite alinear varias ecuaciones. Las ecuaciones que no deban numerarse llevan \lstinline|\nonumber|:
+
+\begin{align}
+    \nabla \cdot \mathbf{E} &= \frac{\rho}{\varepsilon_0} \label{eq:gauss} \\
+    \nabla \cdot \mathbf{B} &= 0 \nonumber \\
+    \nabla \times \mathbf{E} &= -\frac{\partial \mathbf{B}}{\partial t} \nonumber \\
+    \nabla \times \mathbf{B} &= \mu_0\mathbf{J} + \mu_0\varepsilon_0\frac{\partial \mathbf{E}}{\partial t} \label{eq:ampere}
+\end{align}
+
+\subsubsection*{Matrices}
+
+Las matrices se representan con los entornos \textit{pmatrix} (paréntesis), \textit{bmatrix} (corchetes) o \textit{vmatrix} (barras). Se insertan dentro de un entorno matemático:
+
+\begin{equation}
+    \mathbf{A} = \begin{bmatrix}
+        a_{11} & a_{12} & a_{13} \\
+        a_{21} & a_{22} & a_{23} \\
+        a_{31} & a_{32} & a_{33}
+    \end{bmatrix}
+    \label{eq:matriz}
+\end{equation}
+
+\subsection{Tablas}
+
+Las tablas se definen con el entorno flotante \textit{table} (que gestiona la posición) y el entorno \textit{tabular} (que define el contenido). Note que en esta plantilla el \lstinline|\caption{}| va antes del contenido, lo que es la convención habitual para tablas.
+
+\begin{table}[htbp]
+\caption{Comparativa de protocolos de transporte}\label{tab:protocolos}
+\vspace{0.1cm}
+\centering
+\begin{tabular}{llll}
+\hline
+\textbf{Característica} & \textbf{TCP} & \textbf{UDP} & \textbf{SCTP} \\
+\hline
+Orientado a conexión   & Sí  & No  & Sí  \\
+Entrega garantizada    & Sí  & No  & Sí  \\
+Control de flujo       & Sí  & No  & Sí  \\
+Multihoming            & No  & No  & Sí  \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Figuras}
+
+Las figuras son elementos flotantes definidos con el entorno \textit{figure}. El \lstinline|\caption{}| se sitúa \textbf{después} de la imagen. El parámetro de posición \lstinline{[htbp]} indica a \LaTeX{} que intente colocar la figura aquí (\textit{here}), al principio de página (\textit{top}), al final de página (\textit{bottom}) o en una página dedicada (\textit{page}).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.15\linewidth]{etsi/logo-etsi.pdf}
+    \caption{Logotipo de la Escuela Técnica Superior de Ingeniería}
+    \label{fig:logoetsi-cat}
+\end{figure}
+
+\subsection{Fragmentos de código}
+
+El paquete \textit{listings} permite incluir fragmentos de código con resaltado sintáctico. Puede especificar el lenguaje con la opción \lstinline{language=}, y el estilo visual está configurado globalmente por la plantilla.
+
+\begin{lstlisting}[language=Python, caption={Mi código en Python}, label={code:mifuncion}]
+def saludo(nombre):
+    print(f"Hola, {nombre}!")
+\end{lstlisting}
+
+También es posible insertar código en línea con \lstinline`\lstinline|...|` (sustituyendo \lstinline{|} por cualquier carácter delimitador que no aparezca en el código):
+
+\subsection{Glosario y acrónimos}
+
+El paquete \textit{glossaries} permite gestionar un glosario de términos y una lista de acrónimos. Los términos se definen en el preámbulo y se referencian en el texto con \lstinline|\gls{}|.
+
+La primera vez que aparece un acrónimo en el texto, se muestra su forma expandida seguida de la abreviatura entre paréntesis: \gls{tcp} o \gls{udp}. Las apariciones posteriores muestran únicamente la abreviatura: \gls{tcp} o \gls{udp}. Para forzar siempre la forma larga puede usar \lstinline|\glsfirst{}|, y para la forma corta \lstinline|\acrshort{}|.
+
+\subsection{Referencias cruzadas y citas}
+
+\subsubsection*{Referencias cruzadas}
+
+Cualquier elemento etiquetado con \lstinline|\label{etiqueta}| puede referenciarse con \lstinline|\ref{etiqueta}|. Por ejemplo:
+
+\begin{itemize}\itemsep 0em
+    \item La ecuación de Einstein: Ecuación~\ref{eq:einstein}.
+    \item Las ecuaciones de Maxwell: Ecuaciones~\ref{eq:gauss} y~\ref{eq:ampere}.
+    \item La tabla de protocolos: Tabla~\ref{tab:protocolos}.
+    \item La figura del logo: Figura~\ref{fig:logoetsi-cat}.
+\end{itemize}
+
+El símbolo \lstinline|~| inserta un espacio irrompible (no divide el texto en dos líneas) entre la palabra y el número, lo que es buena práctica tipográfica.
+
+\subsubsection*{Citas bibliográficas}
+
+Las referencias bibliográficas se gestionan con \textsc{Bib}\TeX{}. Defina sus entradas en el fichero \textit{bibliografia.bib} y puede citarlas en el texto con \lstinline|\cite{clave}|. La plantilla usa el estilo \lstinline{IEEEtran}, habitual en ingeniería \cite{latexproject}.

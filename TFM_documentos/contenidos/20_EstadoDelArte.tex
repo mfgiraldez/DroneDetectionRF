@@ -1,0 +1,158 @@
+\chapter{Estado del Arte}
+\label{cap:estado_arte}
+
+\epigraph{Si he visto más lejos, es porque estaba parado sobre los hombros de gigantes.}{Isaac Newton}
+
+\lettrine[lraise=-0.1, lines=2, loversize=0.2]{L}{a} detección y clasificación de drones mediante señales de radiofrecuencia es un campo de investigación en constante evolución. En este capítulo se revisan los fundamentos teóricos sobre los que se apoya este proyecto, se analizan los trabajos más relevantes publicados en la literatura reciente y se realiza una evaluación crítica de los conjuntos de datos empleados en la comunidad científica. Esta revisión permite contextualizar las decisiones de diseño adoptadas en los capítulos posteriores y justificar la elección del enfoque propuesto frente a las alternativas existentes.
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Fundamentos de la Detección Pasiva de UAVs en la Banda ISM}
+\label{sec:fundamentos_deteccion}
+% ══════════════════════════════════════════════════════════════════════════════
+
+% Aquí se introducirá el problema de la detección pasiva: qué hace que la banda
+% ISM de 2.4 GHz sea un entorno hostil, características del protocolo FHSS,
+% limitaciones de los detectores clásicos de energía, etc.
+
+\subsection{Protocolos FHSS en Radiocontrol de UAVs}
+\label{subsec:fhss_uav}
+
+% Descripción técnica de cómo operan los protocolos FHSS (DJI, Futaba, Taranis,
+% Graupner, Turnigy), parámetros relevantes: tasa de salto, ancho de banda de
+% la portadora, duración de las ráfagas, etc.
+
+\subsection{Limitaciones del Detector de Energía en Regímenes de Baja SNR}
+\label{subsec:limitaciones_ed}
+
+% Por qué el umbral de energía falla a SNR negativa. Referencia al Neyman-Pearson
+% y sus supuestos, que se violan cuando la interferencia co-canal es comparable
+% a la señal de interés.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Aprendizaje Profundo para la Clasificación de Señales RF}
+\label{sec:dl_clasificacion_rf}
+% ══════════════════════════════════════════════════════════════════════════════
+
+% Revisión de los enfoques de Deep Learning aplicados a la clasificación de señales
+% electromagnéticas: CNNs sobre espectrogramas, modelos 1D sobre I/Q crudo,
+% arquitecturas híbridas, transformers, etc.
+
+\subsection{Arquitecturas Basadas en Representaciones Tiempo-Frecuencia}
+\label{subsec:arquitecturas_espectrograma}
+
+% CNNs 2D sobre espectrogramas y su uso en clasificación de drones. Ventajas
+% e inconvenientes. Trabajos representativos de la literatura.
+
+\subsection{Procesamiento Directo de Secuencias I/Q}
+\label{subsec:arquitecturas_iq}
+
+% Modelos que operan directamente sobre la secuencia compleja (ResNet 1D,
+% TCN, LSTM, etc.) sin transformación previa. Ventajas en términos de
+% preservación de fase y eficiencia computacional.
+
+\subsection{Arquitecturas Híbridas y de Doble Flujo}
+\label{subsec:arquitecturas_hibridas}
+
+% Revisión de modelos que combinan características analíticas con aprendizaje
+% profundo. Motivación para el enfoque propuesto en este proyecto.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Análisis Crítico de los Conjuntos de Datos Existentes}
+\label{sec:analisis_datasets}
+% ══════════════════════════════════════════════════════════════════════════════
+
+En el ámbito de estudio en el que se enmarca este proyecto, centrado en el procesamiento de señales de RF mediante aprendizaje profundo, la representatividad y la calidad del conjunto de datos imponen el límite teórico de generalización y rendimiento del modelo. Una revisión exhaustiva de la literatura reciente revela que los marcos experimentales actuales emplean repositorios consolidados como \textbf{DroneRF} \cite{allahham_dronerf_2019}, \textbf{DroneRFa y DroneRFb} \cite{liu_method_2026, yu_open_2024}, \textbf{UAVSig} \cite{zhao_drone_2024} y \textbf{DRFF-R2} \cite{zheng_multi-scenario_2026}.
+
+Si bien estos conjuntos de datos presentan prestaciones técnicas notables, como grabaciones de distintos tipos de drones con una frecuencia de muestreo muy elevada (desde 40\,MHz hasta 100\,MHz), comparten una limitación metodológica severa: la escasez de transmisiones capturadas empíricamente en entornos con ruido electromagnético e interferencias en la banda de 2.4\,GHz (principalmente Wi-Fi y Bluetooth). Aunque los autores afirman que dichas capturas reflejan escenarios reales, la distribución de la relación señal a ruido (\textit{\gls{snr}}) rara vez desciende de los 10\,dB, eludiendo regímenes críticos de \gls{snr} negativa. Para compensar esta carencia, resulta práctica habitual inyectar de forma artificial ruido blanco gaussiano aditivo (\textit{\gls{awgn}}), ruido no estacionario o artefactos frecuenciales\footnote{En el procesamiento de señales de radiofrecuencia, un artefacto frecuencial se define como una componente espectral anómala o artificial que no pertenece a la emisión electromagnética objeto de estudio. Estas componentes pueden originarse por imperfecciones del \textit{hardware} (por ejemplo, productos de intermodulación o ruido de fase), por anomalías en la conversión a señal digital (\textit{aliasing} o fuga espectral), o bien ser inyectadas matemáticamente para emular interferencias y distorsiones no lineales del canal físico.}.
+
+\subsection{Especificaciones y Requisitos del Conjunto de Datos}
+\label{subsec:requisitos_dataset}
+
+Para que un conjunto de datos se considere apto para abordar el problema de la detección en el límite del ruido térmico, debe satisfacer una serie de requisitos fundamentales. Estos criterios vienen impuestos tanto por la física del canal inalámbrico como por las exigencias teóricas de las arquitecturas de aprendizaje profundo:
+
+\textbf{Características y requisitos deseables:}
+\begin{itemize}
+    \item \textbf{Formato fasorial analítico (I/Q):} la señal debe proporcionarse en banda base compleja, sin transformaciones destructivas previas. Esto preserva la coherencia de fase espacial y las firmas de radiofrecuencia (\textit{RF fingerprinting}) derivadas de las imperfecciones del \textit{hardware} (\textit{hardware impairments}).
+    \item \textbf{Interferencia co-canal empírica:} el entorno de captura debe presentar colisiones espectrales originadas por emisiones asíncronas de banda ancha (e.g., IEEE 802.11) y de banda estrecha (e.g., Bluetooth), operando en la banda \textit{\gls{ism}} de 2.4\,GHz e induciendo un solapamiento verídico en la serie temporal.
+    \item \textbf{Ventanas de observación continuas:} los datos deben consistir en capturas ininterrumpidas que contengan ráfagas de transmisión (con y sin interferencias), intervalos de silencio dominados por el canal, y transmisiones exclusivas de fuentes ajenas al objetivo. Esto permite evaluar la capacidad de segmentación temporal del modelo.
+    \item \textbf{Degradación extrema de la \gls{snr}:} presencia de muestras capturadas físicamente con relaciones señal a ruido negativas, evitando la dependencia exclusiva de la degradación sintética.
+\end{itemize}
+
+\textbf{Características no deseadas y potencialmente excluyentes:}
+\begin{itemize}
+    \item \textbf{Señales presegmentadas:} los recortes manuales de ráfagas individuales eliminan el contexto temporal y ocultan la tasa real de falsos positivos en un despliegue operativo.
+    \item \textbf{Supresión espectral preliminar:} la aplicación de filtros paso-banda estrictos o técnicas de sustracción espectral sobre los datos en crudo destruye la información de fase de baja energía, estrictamente necesaria para que las redes neuronales operen como bancos de filtros adaptativos.
+    \item \textbf{Sesgo hacia alta \gls{snr}:} agrupar la mayoría de las muestras en un rango óptimo (e.g., de 10\,dB a 30\,dB) provoca el sobreajuste del modelo a condiciones ideales, colapsando su rendimiento frente al suelo de ruido del canal.
+    \item \textbf{Degradación exclusivamente sintética:} depender de la inyección matemática de \gls{awgn} ignora la naturaleza no lineal del desvanecimiento (\textit{fading}) y el multitrayecto.
+\end{itemize}
+
+\subsection{Análisis de los Conjuntos de Datos Descartados}
+\label{subsec:datasets_descartados}
+
+Aplicando los criterios definidos, se ha llevado a cabo una evaluación sistemática de los repositorios más prominentes en la literatura reciente.
+
+\subsubsection{DroneRF}
+
+\textbf{Autores y artículo:} Allahham et al. (2019) \cite{allahham_dronerf_2019}.
+
+\textbf{Arquitectura de adquisición de RF:} el núcleo del sistema está compuesto por dos receptores de radio definida por \textit{software} (\textit{\gls{sdr}}) de altas prestaciones, modelo USRP-2943 de National Instruments.
+
+\textbf{Volumen, topología y formato de los datos:} las grabaciones comprenden 227 segmentos temporales con una duración aproximada de 10.25 segundos por captura. A nivel taxonómico, el conjunto cataloga exclusivamente tres modelos comerciales: Parrot Bebop, Parrot AR y DJI Phantom 3. El etiquetado soporta una clasificación jerárquica (hasta 10 modos de vuelo), aunque su distribución es altamente asimétrica.
+
+\textbf{Condiciones electromagnéticas y análisis crítico:} el protocolo de captura presenta deficiencias metodológicas severas. Para registrar el ruido de fondo, se grabó la actividad residual del entorno; no obstante, durante la captura de la clase objetivo, los \gls{uav} operaron a distancias extremadamente cortas de las antenas. Como consecuencia, la \gls{snr} resultó excepcionalmente alta, superando holgadamente el suelo de ruido y la potencia de las interferencias.
+
+\textbf{Impacto y uso en la literatura:} DroneRF se ha consolidado como un \textit{dataset} de referencia. Trabajos como el de Al-Sa'd et al. \cite{al-sad_rf-based_2019} documentan precisiones del 99.7\,\% en clasificación binaria, mientras que Medaiyese et al. \cite{medaiyese_machine_2021} alcanzan un 99.96\,\% utilizando XGBoost. Estas métricas casi perfectas evidencian la carencia de situaciones exigentes con degradación severa de la señal.
+
+\textbf{Justificación formal de descarte:} a pesar de los 80\,MHz de ancho de banda muestreado, DroneRF se descarta por tres carencias críticas. Primero, la escasez de modelos compromete la generalización frente a protocolos \gls{fhss} modernos. Segundo, el desbalanceo de clases introduce sesgos analíticos. Finalmente, la ausencia de solapamiento co-canal destructivo anula la necesidad de implementar mecanismos de aprendizaje profundo, dado que un simple detector de energía podría resolver el problema.
+
+\subsubsection{DroneRFa y DroneRFb}
+
+\textbf{Autores y artículos:} Yu et al. (2024) y Liu et al. (2026) \cite{yu_open_2024, liu_method_2026}.
+
+\textbf{Arquitectura de adquisición de RF:} bases de datos generadas con plataformas SDR USRP. DroneRFa monitoriza simultáneamente las bandas de 915\,MHz, 2.4\,GHz y 5.8\,GHz a 100\,MHz de muestreo. DroneRFb se centra en entornos urbanos (2.4\,GHz) a 80\,MHz.
+
+\textbf{Volumen, topología y formato de los datos:} suponen un salto cuantitativo. DroneRFa aporta más de 500\,GB en bruto, catalogando 24 clases de señales. DroneRFb introduce un enfoque de identificación individual (varias unidades del mismo modelo). Se suministran versiones derivadas como espectrogramas, orientadas a arquitecturas de visión artificial.
+
+\textbf{Condiciones electromagnéticas y análisis crítico:} presentan un sesgo metodológico hacia escenarios de alta energía. Las emisiones registradas son lo suficientemente limpias como para ser aisladas mediante procesamiento digital de señal (\gls{dsp}) tradicional. Los investigadores que emplean estos datos para validar robustez se ven abocados a inyectar \gls{awgn} sintético sobre las muestras originales.
+
+\textbf{Justificación formal de descarte:} se descartan por la predominancia de escenarios con \gls{snr} favorable (que impide modelar la distorsión real del canal) y porque las señales se presentan como segmentos de alta densidad de transmisión, eludiendo el desafío de la búsqueda temporal en el límite del ruido.
+
+\subsubsection{UAVSig}
+
+\textbf{Autores y artículo:} Zhao et al. (2024) \cite{zhao_drone_2024}.
+
+\textbf{Arquitectura de adquisición de RF:} captura basada en USRP N210 operando con una frecuencia de muestreo de 10\,MHz mediante antenas omnidireccionales.
+
+\textbf{Volumen, topología y formato de los datos:} consta de 16\,000 segmentos pre-recortados. Destaca por incluir 10 unidades físicamente idénticas del DJI Phantom 4 Pro para tareas de \textit{RF fingerprinting}.
+
+\textbf{Condiciones electromagnéticas y análisis crítico:} priorizó la obtención de señales con \gls{snr} elevada para facilitar la extracción de variaciones intrínsecas del \textit{hardware}. No contempla grabaciones con interferencias ni rangos de baja \gls{snr}. En la literatura reciente, como el trabajo de Tiras et al. (2025) \cite{tiras_crossrf_2025}, se alcanzan precisiones del 99.03\,\%, operando bajo la premisa irreal de que la ráfaga ya ha sido recortada de forma ideal.
+
+\textbf{Justificación formal de descarte:} su diseño centrado en ráfagas presegmentadas para identificación individual elude por completo el objetivo de este proyecto: la detección continua en presencia de interferencias severas.
+
+\subsubsection{DRFF-R2}
+
+\textbf{Autores y artículo:} Zheng et al. (2026) \cite{zheng_multi-scenario_2026}.
+
+\textbf{Arquitectura de adquisición de RF:} sistema con dos USRP 2943 a una frecuencia de muestreo de 100\,MHz, operando en 5.745\,GHz y 2.437\,GHz.
+
+\textbf{Volumen, topología y formato de los datos:} estructura multiescenario (vuelo sostenido, dinámico, etc.) abarcando 26 drones de la marca DJI. Contiene aproximadamente 140 millones de muestras complejas por segmento.
+
+\textbf{Condiciones electromagnéticas y análisis crítico:} incorpora colisiones espectrales y tráfico Wi-Fi. Sin embargo, su enfoque exige que la transmisión se mantenga por encima del suelo de ruido para caracterizar cinemáticas de vuelo. Trabajos derivados, como la integración con modelos tipo \textit{\gls{llm}} \cite{zheng_uav_2025}, asumen una \gls{snr} inicial lo suficientemente alta como para extraer firmas espectrales de altísima fidelidad.
+
+\textbf{Justificación formal de descarte:} se desestima por dos restricciones excluyentes. En primer lugar, la homogeneidad del fabricante (exclusivamente modelos DJI) introduce un sesgo algorítmico que compromete la generalización frente a esquemas de modulación de otras plataformas. En segundo lugar, el etiquetado exhaustivo de ráfagas continuas de alta energía desvirtúa el desafío de la detección temporal ciega, transformando un problema de localización en el ruido en una tarea de clasificación de energía.
+
+\vspace{\baselineskip}
+
+Ninguno de los conjuntos de datos analizados satisface los requisitos definidos en la Sección~\ref{subsec:requisitos_dataset}. Esta carencia motiva la selección de un repositorio alternativo como eje experimental del presente trabajo, cuya descripción y análisis se detallan en el Capítulo~\ref{cap:MarcoTeorico}.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Síntesis y Posicionamiento del Trabajo}
+\label{sec:sintesis_estado_arte}
+% ══════════════════════════════════════════════════════════════════════════════
+
+% Párrafo de cierre del capítulo que resume los vacíos detectados en la literatura
+% y establece de forma clara cuál es la contribución de este TFM respecto al
+% estado del arte revisado. Sirve de puente natural hacia el Capítulo 3.

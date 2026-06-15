@@ -22,7 +22,16 @@ OUT_DIR = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual"
 DATA_DIR = r"C:\TFM_data\NoisyUAV\drone_RF_data"
 CSV_GOLDEN = r"c:\repos\DroneDetectionRF\NoisyUAV\modelo_v2_1_dual\dataset_v2_1_clean_pointers.csv"
 CKPT_PATH = os.path.join(OUT_DIR, "checkpoints", "best_model.pth")
-RESULTS_DIR = os.path.join(OUT_DIR, "figuras_golden_filtrado_umbral75")
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--local_cfar', action='store_true', help='Usar CFAR local sobre cada ventana de 9.4ms')
+args, _ = parser.parse_known_args()
+
+GLOBAL_CFAR = not args.local_cfar
+if GLOBAL_CFAR:
+    RESULTS_DIR = os.path.join(OUT_DIR, "figuras_golden_filtrado_global")
+else:
+    RESULTS_DIR = os.path.join(OUT_DIR, "figuras_golden_filtrado_per_window")
 
 FS = 14e6
 WIN_LEN = 131072
@@ -30,15 +39,18 @@ N_STEPS = 16
 THRESHOLD_V2 = 0.75
 MIN_CONSECUTIVE = 2
 
-def calculate_phys_features(iq_full):
+def calculate_phys_features(iq_full, adaptive_window_ms):
     try:
-        _, _, H_smooth, _, nf_v, _, _, bursts = detectar_bursts(
-            iq_full, fs=FS, nperseg=2048, z_thresh=2.5
+        _, _, H_smooth, _, nf_v, ns, _, bursts = detectar_bursts(
+            iq_full, fs=FS, nperseg=2048, adaptive_window_ms=adaptive_window_ms, min_burst_ms=0.3, z_thresh=2.5
         )
         global_nf = float(np.median(nf_v))
         global_H  = float(np.mean(H_smooth))
-        z_peak    = max([abs(b['z_peak']) for b in bursts]) if bursts else 0.0
-        return [global_nf, global_H, min(z_peak, 30.0)]
+        if bursts:
+            z_peak = max([abs(b['z_peak']) for b in bursts])
+        else:
+            z_peak = (np.min(H_smooth) - global_nf) / (ns + 1e-10)
+        return [global_nf, global_H, float(np.clip(abs(z_peak), 0, 30))]
     except: return [0.0, 0.0, 0.0]
 
 def main():
@@ -67,9 +79,10 @@ def main():
             d = torch.load(fpath, map_location='cpu', weights_only=False)
             iq_full = d['x_iq'].float()
             
-            # 1. Física Global
-            phys_vals = calculate_phys_features(iq_full)
-            phys_tensor = torch.tensor([phys_vals], dtype=torch.float32).to(device)
+            if GLOBAL_CFAR:
+                # 1. Física Global
+                phys_vals = calculate_phys_features(iq_full, adaptive_window_ms=15.0)
+                phys_tensor = torch.tensor([phys_vals], dtype=torch.float32).to(device)
 
             # 2. Sliding Window
             max_idx = iq_full.shape[1]
@@ -79,6 +92,12 @@ def main():
             for i in range(N_STEPS):
                 start = i * step
                 win = iq_full[:, start:start+WIN_LEN]
+                
+                if not GLOBAL_CFAR:
+                    # 1. Física Local
+                    phys_vals = calculate_phys_features(win, adaptive_window_ms=0.0)
+                    phys_tensor = torch.tensor([phys_vals], dtype=torch.float32).to(device)
+                    
                 power = win.pow(2).mean().clamp(min=1e-12).sqrt()
                 win_norm = (win / power).unsqueeze(0).to(device)
                 logits, _ = model(win_norm, phys_tensor)
@@ -138,6 +157,22 @@ def main():
     plt.ylabel("Prob. de clasificar correctamente como Ruido")
     plt.grid(axis='y', alpha=0.3)
     plt.savefig(os.path.join(RESULTS_DIR, "noise_accuracy_v2_filt.png"), dpi=150)
+
+    # Guardar Reporte Final
+    report = f"""
+    =================================================
+    INFORME FINAL GOLDEN SET - MODELO V2.1 (FILTRADO)
+    =================================================
+    Accuracy Global: {acc:.4f}
+    Recall (Drones): {recall:.4f}
+    Precision:       {precision:.4f}
+    F1-Score:        {f1:.4f}
+    Average Prec:    {ap:.4f}
+    =================================================
+    """
+    with open(os.path.join(RESULTS_DIR, "summary_golden.txt"), 'w') as f:
+        f.write(report)
+    print(report)
 
     print(f"Evaluación completada. Resultados en {RESULTS_DIR}")
 
