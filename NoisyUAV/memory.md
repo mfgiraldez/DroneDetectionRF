@@ -3779,3 +3779,131 @@ Durante la sesión actual se tomaron decisiones arquitectónicas críticas que a
 - **Refinamiento de la Skill `human-academic-writer`**: Se aplicó una actualización estricta a la *skill* de redacción académica, eliminando por completo las estructuras de relleno clásicas de IA ("Es importante destacar...", transiciones redundantes). El foco debe ser la densidad técnica absoluta combinada con una altísima claridad didáctica, explicando el "porqué" físico antes de la formulación puramente matemática.
 - **Rigidez Estructural entre Capítulos 4 y 5**: Se reafirma categóricamente la prohibición de incluir métricas empíricas (como *recall*, exactitud o matrices) en el Capítulo 4. El Capítulo 4 está estrictamente blindado para la topología, el diseño estructural y las motivaciones físicas. Todas las métricas gráficas (que ya están exitosamente generadas en las carpetas `DualStream-Deep` y `modelo_v2_2_dual/figuras_golden`) quedan postergadas en bloque para el inminente Capítulo 5.
 - **Redacción de Arquitectura Definitiva Completada**: Se han entregado al usuario las subsecciones de *Arquitectura Interna y Filtrado Frontal* (explicando el núcleo pasabajos masivo de 128 muestras y la Transformada de Fourier interna) y la *Estrategia de Optimización y Entrenamiento* (BCE directa sobre conjunto purgado de *label noise*, AdamW, truncado de gradientes a 1.0 y escalado dinámico de LR).
+
+### 9. Capítulo 5 (Resultados y Discusión) y Figuras de Arquitectura (Sesión 2026-06-13 al 2026-06-15)
+
+Esta sesión abarca la redacción completa del Capítulo 5 del TFM (`50_ResultadosYDiscusion.tex`) y el inicio de la generación programática de figuras de arquitectura.
+
+---
+
+#### 9.1 Decisiones Estructurales en el Capítulo 5
+
+- **Unificación de secciones DualStream**: Los modelos `DualStream-SlidingWindow` y `DualStream-DynamicSlidingWindow` se presentan en una sola `\section` con `\subsection` independientes, evitando repetición. El criterio diferenciador es la aplicación del umbral adaptativo CFAR en el segundo.
+- **Umbral de decisión del SlidingWindow**: El umbral de clasificación del modelo `DualStream-SlidingWindow` se fijó en el valor que maximiza el F1-Score en validación. Se menciona explícitamente en la memoria que este valor se seleccionó mediante análisis paramétrico y se documenta en la narrativa del capítulo.
+- **Modos de operación CFAR**: Los modos de operación (ajuste dinámico del umbral con CFAR) se documentan **únicamente** en la subsección del modelo `DualStream-DynamicSlidingWindow`, que es la arquitectura definitiva de producción.
+- **Nomenclatura**: En la memoria siempre se usan los nombres completos de los modelos (`SingleStream-CVCNN`, `DualStream-SlidingWindow`, `DualStream-DynamicSlidingWindow`). Las denominaciones internas `v2.1` / `v2.2` quedan proscitas del documento LaTeX.
+- **`\paragraph` con salto de línea**: Todo uso de `\paragraph{...}` va seguido de `\mbox{}\\[0.5em]` para forzar salto de línea visual.
+- **Figuras y flotantes**: Las figuras deben estar ancladas con `[H]` (paquete `float`) para evitar que floten a secciones incorrectas. Problema recurrente: figuras del modelo Deep aparecían en mitad de texto del SlidingWindow.
+
+---
+
+#### 9.2 Sección de Discusión (Capítulo 5)
+
+Se redactó la sección `\section{Discusión}` con tres subsecciones:
+
+1. **Comparativa estructural frente a Glüge et al. (2024)** (`\cite{gluge_robust_2024}`): Análisis crítico de la dependencia de la arquitectura de referencia en procesamiento bidimensional (espectrogramas + CNN 2D), frente a nuestro enfoque de señal temporal unidimensional con CV-CNN. Se insertó la figura `resultados_gluge.png` (extraída directamente del artículo) comparándola con `fig:res_dynamic_snr` y argumentando que nuestro modelo no-visión-artificial iguala a los mejores modelos de visión artificial del artículo de referencia.
+
+2. **Tabla comparativa de modelos** (`\begin{table}`): Tabla de 5 filas (SingleStream, DualStream-SlidingWindow, DualStream-DynamicSlidingWindow, Glüge-No-VA, Glüge-VA) y múltiples columnas de características evaluadas. Las características de la primera columna se revisaron profundamente para que sean descriptivas y claras:
+   - Modalidad de entrada (IQ / PSD)
+   - Requisito de conversión espectral
+   - Extracción de características físicas
+   - Mecanismo de umbral adaptativo (CFAR)
+   - Robustez declarada a SNR bajo
+   - Tipo de arquitectura neuronal
+   - Dependencia de hardware especializado
+   - Modo de operación en tiempo real
+
+3. **Vocabulario vetado**: Se depuró el texto eliminando expresiones propias de IA generativa: *masivo*, *empírico* (usado injustificadamente), *analítico*, *peaje*, *holístico*, *en aras de*, *cabe destacar*, *es importante señalar*, *no es baladí*. El tono objetivo es técnico, sobrio y directo.
+
+4. **VGG**: Se añadió nota a pie de página explicando qué son los modelos VGG cuando aparecen referenciados en la comparativa con Glüge.
+
+---
+
+#### 9.3 Revisión Ortográfica y de Estilo del Capítulo 5
+
+Se realizó una revisión exhaustiva de `50_ResultadosYDiscusion.tex` eliminando:
+- Faltas de concordancia y errores gramaticales menores
+- Redundancias de contenido (repeticiones entre párrafos de distintas subsecciones)
+- Estructuras típicas de texto generado por IA (transiciones vacías, párrafos de cierre redundantes, uso excesivo de superlativos)
+- Uso de expresiones vetadas por el usuario
+
+La revisión se aplicó con la skill `thesis-writing` disponible en el entorno.
+
+---
+
+#### 9.4 Figuras de Arquitectura (Generación Programática con Python/Matplotlib)
+
+Se inició la creación de figuras de arquitectura para el Capítulo 4 (`40_Arquitectura.tex`). Las figuras se generan programáticamente con `matplotlib` y se guardan en:
+
+```
+c:\repos\DroneDetectionRF\figuras_arquitectura\
+```
+
+**Modelo completado: `SingleStream-CVCNN`** (definido en `NoisyUAV/modelos/burst_cvcnn.py` como clase `BurstCVCNN`)
+
+Flujo de datos completo del modelo:
+1. **Entrada**: `[B, 2, N]` — ráfaga IQ de longitud variable (N ≈ 131072 muestras a 14 MHz, 75 ms)
+2. **CV-CNN Backbone**: 4 × `ComplexConvBlock` en serie
+   - Block 1: 1→32 ch, kernel=11, stride=2
+   - Block 2: 32→64 ch, kernel=11, stride=2
+   - Block 3: 64→128 ch, kernel=11, stride=2
+   - Block 4: 128→128 ch, kernel=11, stride=1
+   - Cada bloque: `ComplexConv1D` → `ComplexBN` → `CReLU`
+   - `ComplexConv1D`: Re(W)·I − Im(W)·Q y Im(W)·I + Re(W)·Q (aritmética compleja exacta)
+   - `ComplexBN`: BatchNorm independiente sobre parte real e imaginaria
+   - `CReLU`: ReLU(Re) + j·ReLU(Im)
+3. **Proyección al Dominio Real**: `|z| = √(Re² + Im²)` → `AdaptiveAvgPool1D(32)` → `Flatten + Linear(4096→256) + Dropout(0.30)` → `[B, 256]`
+4. **Rama Física**: 8 características físicas escalares normalizadas con `BatchNorm1D(8)` → `[B, 8]`
+   - Variables: `dur_ms`, `z_peak`, `drop_b`, `n_act`, `global_nf`, `global_ns`, `global_H_mean`, `global_p75_act`
+5. **Concatenación**: `[B, 256] ⊕ [B, 8]` → `[B, 264]`
+6. **MLP Head**: Linear(264→256) → BN+ReLU+Drop(0.40) → Linear(256→128) → BN+ReLU+Drop(0.40) → Linear(128→1) → `[B, 1]`
+7. **Salida**: `σ(x)` (Sigmoide) → `p ≥ umbral` → DRON / NO DRON
+
+**Script de generación**: `figuras_arquitectura/plot_singlestream.py`
+**Salidas**: `singlestream_architecture.pdf` y `singlestream_architecture.png`
+
+Criterios de diseño de las figuras (acordados con el usuario):
+- **Fondo blanco** — estilo académico compatible con el TFM (no dark mode)
+- **Paleta de colores contenida**: azul (IQ), verde (Conv), violeta (Física), naranja (Concat), rojo oscuro (MLP), verde oscuro (Dron), rojo claro (No Dron)
+- **Sin solapamiento de texto** — cada caja dimensionada para su contenido
+- **Dimensiones tensoriales anotadas** en flechas clave
+- **Leyenda de color** al pie de la figura
+- **Labels de sección** en fila superior (ENTRADAS | BACKBONE CV-CNN | PROYECCIÓN REAL | FUSIÓN | CLASIFICADOR MLP | SALIDA)
+- Las figuras del modelo DualStream-SlidingWindow y DualStream-DynamicSlidingWindow están pendientes de generar.
+
+---
+
+#### 9.5 Estado Actual del TFM (a 2026-06-15)
+
+| Capítulo | Estado |
+|---|---|
+| Cap. 1 — Introducción | ✅ Completado |
+| Cap. 2 — Estado del Arte | ✅ Completado |
+| Cap. 3 — Entorno y Datos | ✅ Completado |
+| Cap. 4 — Arquitectura | ✅ Completado (figuras de arquitectura en generación) |
+| Cap. 5 — Resultados y Discusión | ✅ Redactado, en revisión final |
+| Cap. 6 — Conclusiones | ⬜ Pendiente |
+
+**Ficheros LaTeX principales**:
+- `TFM_documentos/contenidos/40_Arquitectura.tex` — Cap. 4 (arquitectura de todos los modelos)
+- `TFM_documentos/contenidos/50_ResultadosYDiscusion.tex` — Cap. 5 (resultados y discusión)
+- `TFM_documentos/documento.tex` — documento raíz
+- `TFM_documentos/bibliografia.bib` — bibliografía
+
+**Figuras de resultados generadas** (en `NoisyUAV/figuras_TFM_reducidas/`):
+- `eval_singlestream_*.pdf/png` — métricas del SingleStream-CVCNN
+- `eval_dualstream_*.pdf/png` — métricas del DualStream-SlidingWindow
+- `eval_dynamic_*.pdf/png` — métricas del DualStream-DynamicSlidingWindow
+- `resultados_gluge.png` — figura extraída de Glüge et al. (2024) para comparativa
+
+---
+
+#### 9.6 Reglas de Estilo Consolidadas (para retomar en cualquier sesión)
+
+1. **Nomenclatura de modelos**: usar SIEMPRE el nombre completo. Nunca v2.1/v2.2.
+2. **`\paragraph`**: siempre seguido de `\mbox{}\\[0.5em]`
+3. **Vocabulario vetado**: masivo, empírico (injustificado), analítico, peaje, holístico, cabe destacar, es importante señalar, en aras de, no es baladí, operativo (injustificado)
+4. **Figuras**: usar `[H]` de paquete `float`, nunca `[h]` o `[ht]`
+5. **Separación Cap. 4 / Cap. 5**: el Cap. 4 NO tiene métricas empíricas. Solo topología, diseño y motivación física.
+6. **Citas**: usar el estilo `\cite{key}` con las claves de `bibliografia.bib`
+7. **Figuras de arquitectura**: generadas con `matplotlib`, fondo blanco, guardadas en `figuras_arquitectura/`
