@@ -89,6 +89,12 @@ Apply these writing conventions from scholarly research:
 - Present tense for established facts, past tense for specific studies
 - Clear, direct statements without unnecessary complexity
 
+**Strict Rules for Spanish Academic Writing:**
+- **No English-style typography**: NEVER use em-dashes ("- contenido -") for parenthetical thoughts. Use standard Spanish parenthetical commas or proper parentheses.
+- **No inline definitions**: NEVER put a concept explanation or term immediately in parentheses after a word (e.g., "la Transformada de Fourier (una técnica matemática)"). Integrate it naturally into the prose.
+- **Mandatory citations**: PROHIBITED to explain complex concepts or present important data/metrics without adding an associated bibliographic reference (`\cite{}`). Every factual claim must be backed up.
+- **Natural Spanish phrasing**: Write naturally in Castellano. Do NOT use English-style extremely short, choppy sentences. Use well-connected, fluid academic prose with appropriate subordinate clauses and discourse markers.
+
 **Technical Precision:**
 - Define all acronyms on first use: "Context-Aware Systems (C-AS)"
 - Use domain-specific terminology correctly and consistently

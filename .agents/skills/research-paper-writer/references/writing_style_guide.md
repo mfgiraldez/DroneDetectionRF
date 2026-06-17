@@ -135,10 +135,11 @@ Keep it concise (typically 1/2 to 3/4 page).
 
 ### Sentence Structure
 
-**Complexity Balance:**
-- Mix simple and complex sentences
-- Use subordinate clauses for nuance
-- Break up long sentences (>30 words typically too long)
+**Complexity Balance & Natural Phrasing (Especially for Spanish):**
+- **Natural Spanish flow**: Write naturally in Castellano. DO NOT use English-style extremely short, disjointed sentences. Use well-connected, fluid prose with subordinate clauses where appropriate.
+- **No English typographical quirks**: NEVER use em-dashes ("- contenido -") for parenthetical thoughts. NEVER put term definitions immediately in parentheses.
+- **Mandatory citations**: NEVER explain a complex concept or present an important metric/data point without an associated citation (`\cite{}`). Every claim needs backing.
+- Break up sentences only if they become excessively long (>40 words) and confusing, but maintain rhetorical flow.
 
 **Active vs Passive Voice:**
 - Prefer active for clarity: "We implemented..."

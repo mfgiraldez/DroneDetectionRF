@@ -4048,3 +4048,20 @@ La skill IEEE/ACM fue aplicada con las siguientes reglas específicas:
 8. **Ecuaciones LaTeX**: en modo math, usar \% sin \, antes para evitar Incompatible glue units. Usar $\pm 15\%$ en lugar de $\pm15\,\%$.
 9. **Skill activa**: esearch-paper-writer instalada en .agents/skills/research-paper-writer/. SIEMPRE leer SKILL.md + eferences/writing_style_guide.md al inicio de cualquier sesión de redacción.
 10. **Acrónimos**: verificar con PowerShell que todos los \gls{} usados en contenidos/*.tex están definidos en documento.tex antes de compilar.
+
+
+### 10.10 Resumen de la Sesión Actual (Limpieza y Rigor Académico)
+
+**Modificaciones en Skills de Escritura:**
+- Prohibido el uso de anglicismos estructurales (ej. 'los conflictos han presenciado', usar construcciones pasivas reflexivas o impersonales).
+- Prohibido el uso de guiones largos (—) para incisos aclaratorios en mitad del texto. Se deben usar comas u oraciones subordinadas integradas.
+- Obligatoriedad estricta de citar fuentes primarias para afirmar hitos históricos o datos de mercado (ej. SESAR 2016 para previsiones de mercado, UK DfT 2019 para Gatwick).
+
+**Cambios Estructurales en TFM:**
+- **Introducción (Cap. 1)**: Se extrajo la sección de sistemas comerciales C-UAS (DroneShield, Rafael, etc.) por ser invasión del estado del arte. Se eliminó el párrafo de drones autónomos (no aplica a detección RF). Se reescribió el contexto militar eliminando cifras arbitrarias ('10 drones saturan un sistema') por conceptos tácticos de saturación volumétrica.
+- **Estado del Arte (Cap. 2)**: Se insertó la subsección Sistemas C-UAS Comerciales y Militares. Se realizó una limpieza profunda de tipografía en los Capítulos 1 y 2 eliminando comas mal formateadas y guiones largos.
+
+**Próximos Pasos Pendientes (Para el siguiente Agente):**
+1. **Estado del Arte**: Se ha acordado incluir en la Sección 2.3 un resumen sobre los límites de rendimiento en regímenes de baja SNR. El borrador indica que los detectores de energía fallan con SNR negativa, las CNN sobre espectrogramas (Ozturk, Glüge) mantienen precisión hasta -10/-12 dB, y mediante preprocesamiento o arquitecturas complejas (Noh, Taleb) se puede rozar los -15 dB. Queda pendiente buscar estos papers e insertar los párrafos formalizados.
+2. **Figuras de Arquitectura**: Queda pendiente generar los esquemas de DualStream-SlidingWindow y DualStream-DynamicSlidingWindow basándose en el template de SingleStream.
+3. **Redacción de Cap. 5 y 6**: Retomar la redacción de Resultados y Discusión con el nuevo protocolo estricto de rigor académico.
