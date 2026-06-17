@@ -22,3 +22,17 @@ outputs/
 # Python
 .env
 venv/
+
+# LaTeX auxiliaries
+*.aux
+*.bbl
+*.blg
+*.toc
+*.lof
+*.lot
+*.lol
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.log
