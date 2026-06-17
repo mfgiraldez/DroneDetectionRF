@@ -1,0 +1,70 @@
+This is BibTeX, Version 0.99d (TeX Live 2024)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: documento.aux
+A level-1 auxiliary file: contenidos/00_frontmatter.aux
+A level-1 auxiliary file: contenidos/10_Introduccion.aux
+A level-1 auxiliary file: contenidos/20_EstadoDelArte.aux
+A level-1 auxiliary file: contenidos/30_EntornoYDatos.aux
+A level-1 auxiliary file: contenidos/40_Arquitectura.aux
+The style file: IEEEtran.bst
+I couldn't open auxiliary file anexos/A_ejemplo.aux
+---line 21 of file documento.aux
+ : \@input{anexos/A_ejemplo.aux
+ :                             }
+I'm skipping whatever remains of this command
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Database file #1: bibliografia.bib
+-- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
+-- http://www.michaelshell.org/tex/ieeetran/bibtex/
+-- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
+Warning--empty booktitle in khan_historic_2025
+Warning--empty booktitle in li_dividemix_2020
+Warning--missing publisher in miller_service_2007
+
+Done.
+You've used 53 entries,
+            4087 wiz_defined-function locations,
+            1150 strings with 19973 characters,
+and the built_in function-call counts, 40020 in all, are:
+= -- 3237
+> -- 1036
+< -- 280
++ -- 557
+- -- 214
+* -- 2071
+:= -- 6124
+add.period$ -- 108
+call.type$ -- 53
+change.case$ -- 58
+chr.to.int$ -- 615
+cite$ -- 56
+duplicate$ -- 2869
+empty$ -- 3172
+format.name$ -- 243
+if$ -- 9240
+int.to.chr$ -- 0
+int.to.str$ -- 53
+missing$ -- 538
+newline$ -- 244
+num.names$ -- 53
+pop$ -- 1273
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 2
+skip$ -- 3030
+stack$ -- 0
+substring$ -- 1572
+swap$ -- 2364
+text.length$ -- 75
+text.prefix$ -- 0
+top$ -- 5
+type$ -- 53
+warning$ -- 3
+while$ -- 158
+width$ -- 55
+write$ -- 608
+(There was 1 error message)

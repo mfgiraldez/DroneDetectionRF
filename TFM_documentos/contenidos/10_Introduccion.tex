@@ -1,0 +1,309 @@
+% ═══════════════════════════════════════════════════════════════════════════════
+%  Capítulo 1 — Introducción
+%  TFM: Detección de Aeronaves No Tripuladas mediante Señales de RF y
+%       Redes Neuronales de Valor Complejo en Entornos de Baja SNR
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\chapter{Introducción}
+\label{cap:introduccion}
+
+% ───────────────────────────────────────────────────────────────────────────────
+\section{Contexto y motivación}
+\label{sec:contexto}
+% ───────────────────────────────────────────────────────────────────────────────
+
+\lettrine{E}{l} rápido desarrollo de los vehículos aéreos no tripulados —denominados
+\gls{uav} en la literatura anglosajona— ha dado lugar a una transformación profunda del
+espacio aéreo de baja altitud. Desde su origen como plataformas exclusivamente
+militares de reconocimiento y ataque de precisión, los \gls{uav} han evolucionado
+hasta convertirse en herramientas de uso cotidiano tanto en aplicaciones civiles
+—fotografía aérea, cartografía, agricultura de precisión, reparto de mercancías—
+como en contextos de seguridad y defensa nacional. Según estimaciones del mercado
+global, el número de \gls{uav} civiles en operación superó los 800\,000 en Europa en
+2024, con proyecciones que anticipan una triplicación para el año 2030
+\cite{alam_rf-enabled_2023}.
+
+Esta proliferación masiva conlleva riesgos cuya gestión eficaz constituye uno
+de los desafíos tecnológicos más relevantes de la década presente. Los incidentes
+en aeropuertos internacionales —como el cierre del Aeropuerto de Gatwick en
+diciembre de 2018, que afectó a más de 140\,000 pasajeros— ilustran la dimensión
+operativa del problema en entornos civiles. En el ámbito militar, el conflicto en
+Ucrania ha evidenciado el empleo sistemático de \gls{uav} comerciales de bajo coste
+como vectores de ataque, de vigilancia y de guerra electrónica, redefiniendo las
+doctrinas de defensa terrestre contemporáneas. En este contexto, la detección
+fiable de aeronaves no tripuladas se ha convertido en una capacidad estratégica de
+primer orden.
+
+Los sistemas de contención de \gls{uav} —conocidos en la literatura como sistemas
+\textit{Counter-UAS} (C-UAS) o anti-dron— abarcan un espectro de tecnologías
+heterogéneas. Los enfoques basados en señales de radiofrecuencia (\gls{psd}, \gls{snr},
+espectros IQ) han emergido como los más adecuados para su despliegue en entornos
+congestionados desde el punto de vista electromagnético, donde otras modalidades
+—radar activo, sensores electroópticos o detección acústica— presentan limitaciones
+operativas fundamentales. Sin embargo, los enfoques convencionales de detección RF
+exhiben una degradación severa del rendimiento cuando la \gls{snr} de la señal objetivo
+desciende por debajo de los $-6$\,dB, umbral que caracteriza los escenarios de
+operación encubierta, vuelo a larga distancia o interferencia deliberada.
+
+El presente \textit{Trabajo Fin de Máster} (TFM) aborda precisamente este reto:
+desarrollar y evaluar un sistema de detección de \gls{uav} basado en el análisis de
+señales de radiofrecuencia en bruto —formato en cuadratura (IQ)— mediante técnicas
+de aprendizaje profundo, con énfasis específico en la robustez bajo condiciones de
+baja \gls{snr}. El trabajo propone y evalúa una familia de arquitecturas de redes
+neuronales de valor complejo (\gls{cv-cnn}) que operan directamente sobre la señal IQ,
+preservando la información de fase, y las combina con características físicas
+extraídas mediante un detector energético adaptativo tipo \gls{cfar}.
+
+% ───────────────────────────────────────────────────────────────────────────────
+\section{Situación actual: implicaciones en defensa, privacidad y seguridad}
+\label{sec:situacion_actual}
+% ───────────────────────────────────────────────────────────────────────────────
+
+La proliferación de \gls{uav} de bajo coste ha generado un conjunto de amenazas
+transversales que trascienden los límites del ámbito militar y afectan a la
+seguridad pública, la privacidad individual y la protección de infraestructuras
+críticas. A continuación se describen los vectores de riesgo más relevantes
+identificados en la literatura reciente.
+
+\paragraph{Vigilancia no autorizada y vulneración de la privacidad.}\mbox{}\\[0.5em]
+Los \gls{uav} equipados con cámaras de alta resolución y sensores térmicos constituyen
+una herramienta de vigilancia encubierta de bajo coste y difícil detección. Incidentes
+documentados incluyen el sobrevuelo sistemático de instalaciones militares en varios
+países de la OTAN, la captación de imágenes sobre centros penitenciarios para
+facilitar el contrabando y la monitorización de eventos de masas sin autorización
+administrativa. El marco regulatorio europeo, establecido por el Reglamento
+(UE) 2019/945 de la Agencia Europea de Seguridad Aérea (EASA), clasifica los
+\gls{uav} según su riesgo operacional e impone obligaciones de registro e
+identificación electrónica a distancia; sin embargo, la brecha entre la norma y la
+capacidad tecnológica de verificación sigue siendo significativa
+\cite{ezuma_detection_2020}.
+
+\paragraph{Uso como vector de ataque.}\mbox{}\\[0.5em]
+El empleo de \gls{uav} como vectores de ataque directo —incluyendo modelos kamikazes
+de bajo coste denominados \textit{First Person View} (FPV)— se ha consolidado como
+una táctica recurrente en conflictos asimétricos modernos. Organismos como el
+Departamento de Defensa de los Estados Unidos y el Estado Mayor Conjunto de las
+Fuerzas Armadas Españolas han identificado la proliferación de enjambres de
+\gls{uav} como una de las amenazas emergentes de mayor prioridad para los próximos
+lustros. Un enjambre de tan solo diez \gls{uav} comerciales, coordinados mediante
+protocolos distribuidos, es capaz de saturar los sistemas de defensa convencionales
+diseñados para tratar amenazas individuales.
+
+\paragraph{Perturbación de infraestructuras críticas.}\mbox{}\\[0.5em]
+Los aeropuertos, las plantas nucleares, los centros de datos y los sistemas de
+generación eléctrica constituyen objetivos susceptibles a la perturbación inducida
+por \gls{uav}. La proximidad de un \gls{uav} a la trayectoria de aterrizaje de una
+aeronave comercial puede derivar en colisión con motores o superficies de control,
+con consecuencias potencialmente catastróficas. El Aeropuerto Heathrow de Londres
+registró 93 incidentes de acercamientos no autorizados de \gls{uav} solo en 2023,
+cifra que ilustra la magnitud del problema en entornos aeroportuarios de alta
+densidad \cite{gluge_robust_2024}.
+
+\paragraph{Marco regulatorio y limitaciones vigentes.}\mbox{}\\[0.5em]
+La respuesta regulatoria a esta problemática ha avanzado de forma desigual a escala
+global. La EASA introdujo en enero de 2021 un marco de identificación remota
+obligatoria (\textit{Remote ID}) que exige la emisión periódica de un identificador
+único por parte de todo \gls{uav} en vuelo. Sin embargo, este mecanismo es trivialmente
+eludible por operadores malintencionados que desactiven el módulo correspondiente,
+y no proporciona ninguna capacidad de detección autónoma por parte de los sistemas
+de seguridad. Esta limitación intrínseca del enfoque regulatorio refuerza la
+necesidad de sistemas de detección tecnológicamente robustos e independientes de la
+colaboración del operador.
+
+% ───────────────────────────────────────────────────────────────────────────────
+\section{Principales sistemas de defensa anti-dron}
+\label{sec:sistemas_antidron}
+% ───────────────────────────────────────────────────────────────────────────────
+
+El mercado de los sistemas C-UAS ha experimentado un crecimiento exponencial desde
+2020. Valorado en aproximadamente 2\,700 millones de dólares en 2024, se proyecta
+que alcance los 11\,000 millones antes de 2030, según estimaciones de diversos
+informes sectoriales. A continuación se describen los sistemas de referencia más
+representativos, con énfasis en su modalidad de detección y sus capacidades
+operativas documentadas.
+
+\paragraph{DroneShield DroneSentry y RfPatrol.}\mbox{}\\[0.5em]
+DroneShield es una empresa australiana especializada en C-UAS cuya plataforma
+\textit{DroneSentry} implementa una detección multicapa basada en la fusión de
+sensores RF, radar de onda continua y cámaras electroópticas. El módulo RF analiza
+el espectro entre 70\,MHz y 6\,GHz, siendo capaz de identificar protocolos de
+control DJI, Futaba y otros fabricantes comerciales mediante análisis espectral en
+tiempo real. Su variante portátil \textit{RfPatrol} está concebida para protección
+de personal en movimiento y ha sido desplegada por unidades militares de varios
+países aliados de la OTAN. Ambas plataformas han sido objeto de contratos
+multimillonarios con organismos de defensa de Estados Unidos y la Unión Europea
+durante el período 2024-2025.
+
+\paragraph{Dedrone RF-300.}\mbox{}\\[0.5em]
+Dedrone, empresa de origen alemán actualmente con sede en Estados Unidos, ofrece
+la plataforma \textit{DedroneRF-300}, un sistema pasivo de detección RF que opera
+mediante el análisis de las bandas \gls{ism} de 2,4\,GHz y 5,8\,GHz. El sistema
+incorpora una base de datos de firmas espectrales de más de 500 modelos de \gls{uav}
+comerciales y militares, permitiendo la identificación por protocolos y la
+geolocalización del piloto mediante triangulación de la señal de control. Ha sido
+desplegado en eventos de alta seguridad, incluyendo el Foro Económico Mundial de
+Davos y diversas instalaciones de la Agencia Central de Inteligencia (CIA).
+
+\paragraph{Thales RAPIDFire y sistemas de energía dirigida.}\mbox{}\\[0.5em]
+Thales ha desarrollado el sistema \textit{RAPIDFire}, originalmente concebido como
+cañón antiaéreo, que ha sido adaptado para la neutralización de \gls{uav} mediante
+proyectiles de alta cadencia de tiro. En paralelo, el creciente interés en los
+sistemas de energía dirigida —en particular el láser de alta energía y los emisores
+de microondas de alta potencia (HPM)— refleja la búsqueda de soluciones de
+neutralización con menor coste por disparo y menor riesgo de daños colaterales en
+entornos urbanos. Sin embargo, estos sistemas requieren que la detección y el
+seguimiento del objetivo estén garantizados con anterioridad a la neutralización,
+lo que sitúa a los módulos de detección RF como el primer eslabón imprescindible
+de la cadena C-UAS.
+
+\paragraph{AUDS (\textit{Anti-UAV Defence System}).}\mbox{}\\[0.5em]
+El sistema AUDS, desarrollado conjuntamente por Chess Dynamics, Enterprise Control
+Systems y Blighter Surveillance Systems, combina radar de escaneo electrónico, cámara
+electroóptica de largo alcance e inhibidor de radiofrecuencia (\textit{jammer}).
+Su arquitectura permite la detección a distancias de hasta 8\,km —dependiendo de las
+condiciones atmosféricas y el tamaño del \gls{uav}— y la neutralización mediante la
+inhibición selectiva de las frecuencias de telemetría y control. Ha sido evaluado
+por el Ministerio de Defensa del Reino Unido y desplegado en operaciones en el
+teatro de operaciones de Oriente Próximo.
+
+\paragraph{Rafael Drone Dome.}\mbox{}\\[0.5em]
+El sistema israelí \textit{Drone Dome}, desarrollado por Rafael Advanced Defense
+Systems, representa la arquitectura C-UAS de referencia en escenarios de alta
+intensidad. Integra radares 3D de banda X, sensores electroópticos/infrarrojos y un
+sistema de guerra electrónica capaz de bloquear los canales de telemetría GPS y RF.
+Adicionalmente, incorpora un módulo de neutralización mediante láser de estado sólido
+de alta potencia. El sistema fue desplegado durante los Juegos Olímpicos de Tokio
+2020 y se ha empleado operativamente en la protección del espacio aéreo israelí
+frente a incursiones de \gls{uav} procedentes del Líbano y Gaza.
+
+% ───────────────────────────────────────────────────────────────────────────────
+\section{Limitaciones fundamentales de los sistemas actuales}
+\label{sec:limitaciones}
+% ───────────────────────────────────────────────────────────────────────────────
+
+A pesar de los avances reseñados, los sistemas C-UAS de última generación presentan
+un conjunto de limitaciones estructurales que condicionan su eficacia en escenarios
+operativos reales. La identificación precisa de estas limitaciones constituye el
+punto de partida que motiva la investigación desarrollada en este trabajo.
+
+\paragraph{Degradación del rendimiento en baja SNR.}\mbox{}\\[0.5em]
+Los sistemas basados en análisis RF exhiben una pérdida de rendimiento acusada cuando
+la \gls{snr} de la señal objetivo desciende por debajo de un umbral crítico, típicamente
+situado entre $-4$ y $-8$\,dB en función de la arquitectura empleada. En este
+régimen, los detectores de energía convencionales no consiguen distinguir la señal
+del \gls{uav} del ruido de fondo electromagnético, en particular cuando coexisten fuentes
+de interferencia como redes Wi-Fi, dispositivos Bluetooth y señales \gls{awgn}. Esta
+limitación es especialmente pronunciada cuando el \gls{uav} opera a distancias superiores
+a los 300\,m o en entornos urbanos con alta densidad espectral de interferentes
+\cite{gluge_robust_2024, lacy_machine_2024}.
+
+\paragraph{Amenaza de los \gls{uav} autónomos sin enlace RF activo.}\mbox{}\\[0.5em]
+Los sistemas C-UAS basados exclusivamente en la detección del enlace de
+telecomando son incapaces de detectar \gls{uav} que operen en modo autónomo mediante
+trayectorias preprogramadas o guiado inercial. Esta categoría incluye tanto los
+denominados \gls{uav} «de vuelo ciego» —que prescinden de la telemetría durante la
+misión— como los diseñados específicamente para eludir la detección RF, que
+emplean protocolos de comunicación no estándar o cifrados sobre frecuencias
+dinámicas. El porcentaje de modelos comerciales con capacidad de vuelo autónomo
+supera el 60\,\% en los catálogos de los principales fabricantes, lo que
+compromete de forma estructural los enfoques puramente RF \cite{rout_novel_2025}.
+
+\paragraph{Proliferación de enjambres y coordinación distribuida.}\mbox{}\\[0.5em]
+Las arquitecturas de ataque mediante enjambres de \gls{uav} —que distribuyen la
+funcionalidad entre múltiples unidades de bajo coste en lugar de concentrarla en
+una plataforma singular— representan un vector de amenaza cualitativamente distinto
+al que los sistemas C-UAS actuales no se encuentran optimizados para responder. La
+coordinación entre unidades puede realizarse mediante protocolos de comunicación
+de malla de baja potencia, en frecuencias fuera de las bandas convencionales de
+supervisión, o incluso de forma completamente offline mediante algoritmos de
+enjambre predeterminados. La respuesta eficaz a esta amenaza requiere sistemas
+capaces de procesar múltiples señales simultáneas con tiempos de latencia reducidos.
+
+\paragraph{Congestión espectral y falsos positivos.}\mbox{}\\[0.5em]
+En entornos urbanos densamente poblados, el espectro electromagnético en las bandas
+de 2,4\,GHz y 5,8\,GHz está saturado por dispositivos Wi-Fi, Bluetooth, teléfonos
+inteligentes y otros sistemas que emiten señales espectralmente similares a las de
+los protocolos de control de \gls{uav}. Los sistemas C-UAS convencionales presentan
+tasas de falsos positivos elevadas en estos entornos, lo que los hace operativamente
+inviables para su despliegue en zonas metropolitanas sin intervención humana
+continua. La tasa de falsas alarmas es un parámetro crítico en las especificaciones
+militares de sistemas de defensa, dado que la neutralización de un objetivo
+legítimamente identificado como amenaza —como una aeronave comercial— puede tener
+consecuencias catastróflicas.
+
+\paragraph{Limitaciones de generalización entre plataformas.}\mbox{}\\[0.5em]
+Los sistemas basados en bases de datos de firmas espectrales estáticas requieren
+actualización continua ante la aparición de nuevos modelos de \gls{uav}, tarea que
+resulta inviable a la escala de la proliferación actual del mercado. Los enfoques
+de aprendizaje automático que aprenden representaciones genéricas de las señales
+—en lugar de depender de firmas preprogramadas— ofrecen una mayor robustez frente
+a plataformas desconocidas, aunque su eficacia disminuye notablemente cuando la
+\gls{snr} disponible no permite la extracción de rasgos discriminativos fiables
+\cite{ezuma_micro-uav_2019}.
+
+% ───────────────────────────────────────────────────────────────────────────────
+\section{Objetivos y contribuciones del trabajo}
+\label{sec:objetivos}
+% ───────────────────────────────────────────────────────────────────────────────
+
+A la vista de las limitaciones identificadas, el presente trabajo se propone avanzar
+en el estado del arte de la detección de \gls{uav} mediante señales RF en condiciones
+adversas de \gls{snr}. La pregunta de investigación central que guía el trabajo es la
+siguiente:
+
+\begin{quote}
+\textit{¿Es posible diseñar un sistema de detección de \gls{uav} basado en señales RF
+en bruto que mantenga un rendimiento de clasificación aceptable —superior al
+80\,\% de exactitud global— en escenarios con SNR inferior a $-6$\,dB, en
+presencia simultánea de interferencias Wi-Fi y Bluetooth?}
+\end{quote}
+
+Para dar respuesta a esta pregunta, el trabajo realiza las siguientes contribuciones
+principales:
+
+\begin{enumerate}
+
+  \item \textbf{Diseño y evaluación de una familia de arquitecturas \gls{cv-cnn} para
+  señales IQ.} Se proponen tres variantes arquitectónicas —denominadas
+  \textit{SingleStream-CVCNN}, \textit{DualStream-SlidingWindow} y
+  \textit{DualStream-DynamicSlidingWindow}— que operan directamente sobre señales
+  IQ en bruto mediante convoluciones complejas de Wirtinger, preservando la
+  información de fase de la señal.
+
+  \item \textbf{Integración de un detector energético adaptativo CFAR con extracción
+  de características físicas.} Se desarrolla un detector basado en la entropía de
+  Shannon sobre la \gls{stft} de la señal, configurado con un mecanismo adaptativo de
+  umbral tipo \gls{cfar}, cuyas salidas se utilizan para guiar la segmentación temporal
+  de la señal y extraer un vector de ocho características físicas que complementa
+  la representación neuronal.
+
+  \item \textbf{Desarrollo y validación de un esquema de pseudo-etiquetado mediante
+  oráculo físico.} Se propone un sistema de etiquetado automático de ráfagas
+  individuales a bajo \gls{snr} basado en la coherencia temporal de las duraciones de
+  los saltos \gls{fhss}, que permite ampliar el conjunto de entrenamiento sin
+  necesidad de etiquetado manual en el dominio de baja \gls{snr}.
+
+  \item \textbf{Evaluación experimental exhaustiva sobre el conjunto de datos
+  NoisyUAV.} Se reportan métricas de rendimiento desagregadas por nivel de \gls{snr},
+  por modelo de emisor RF y por modalidad de interferencia, sobre el conjunto de
+  datos NoisyUAV, que constituye el repositorio de señales RF de \gls{uav} con mayor
+  diversidad de condiciones electromagnéticas adversas disponible públicamente.
+
+\end{enumerate}
+
+% ───────────────────────────────────────────────────────────────────────────────
+\section{Estructura del documento}
+\label{sec:estructura}
+% ───────────────────────────────────────────────────────────────────────────────
+
+El presente documento se organiza en seis capítulos. El Capítulo~\ref{cap:EstadoDelArte}
+revisa el estado del arte en detección de \gls{uav} mediante señales RF, con énfasis
+en los enfoques basados en aprendizaje automático y en los conjuntos de datos
+públicos disponibles para su evaluación. El Capítulo~\ref{cap:MarcoTeorico} describe
+el entorno experimental, el conjunto de datos NoisyUAV y el protocolo de evaluación
+empleado. El Capítulo~\ref{cap:Arquitectura} detalla las arquitecturas propuestas,
+su fundamentación teórica y las decisiones de diseño adoptadas. El
+Capítulo~\ref{cap:ResultadosDiscusion} presenta los resultados experimentales y
+discute su significado en relación con el estado del arte. Finalmente, el
+Capítulo~\ref{cap:Conclusiones} resume las contribuciones del trabajo y propone
+líneas de investigación futura.

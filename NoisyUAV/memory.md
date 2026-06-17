@@ -3907,3 +3907,144 @@ Criterios de diseño de las figuras (acordados con el usuario):
 5. **Separación Cap. 4 / Cap. 5**: el Cap. 4 NO tiene métricas empíricas. Solo topología, diseño y motivación física.
 6. **Citas**: usar el estilo `\cite{key}` con las claves de `bibliografia.bib`
 7. **Figuras de arquitectura**: generadas con `matplotlib`, fondo blanco, guardadas en `figuras_arquitectura/`
+
+---
+
+## Sesión 10 — Redacción Cap. 1 (Introducción) y reescritura completa Cap. 2 (Estado del Arte)
+*Fecha: 2026-06-17*
+
+---
+
+### 10.1 Instalación del entorno
+
+- **Node.js v24.16.0** instalado mediante winget install OpenJS.NodeJS.LTS (con confirmación UAC del usuario).
+- **Skill esearch-paper-writer** instalada vía 
+px skills add https://github.com/ailabs-393/ai-labs-claude-skills --skill research-paper-writer.
+  - Ubicación: c:\repos\DroneDetectionRF\.agents\skills\research-paper-writer\
+  - Ficheros: SKILL.md, eferences/writing_style_guide.md, eferences/ieee_formatting_specs.md, eferences/acm_formatting_specs.md, ssets/.
+- La skill fue **leída íntegramente** (SKILL.md + writing_style_guide.md) antes de redactar cualquier capítulo.
+
+---
+
+### 10.2 Corrección de acrónimos faltantes en documento.tex
+
+Se detectó que 40_Arquitectura.tex (preexistente) usaba \gls{fft} sin definición en el preámbulo. Se añadieron las siguientes entradas al preámbulo de documento.tex:
+
+`latex
+\newacronym{fft}{FFT}{Fast Fourier Transform}
+\newacronym{relu}{ReLU}{Rectified Linear Unit}
+\newacronym{bn}{BN}{Batch Normalization}
+`
+
+---
+
+### 10.3 Capítulo 1 — Introducción (NUEVO)
+
+**Fichero creado**: TFM_documentos/contenidos/10_Introduccion.tex
+
+**Estructura** (≥6 páginas estimadas en PDF final):
+
+| Sección | Contenido |
+|---|---|
+| §1.1 Contexto y motivación | Proliferación UAV, estadísticas mercado 800k+, incidentes Gatwick y Ucrania |
+| §1.2 Situación actual: defensa, privacidad, seguridad | Vigilancia no autorizada, vectores de ataque (FPV kamikazes), infraestructuras críticas, marco EASA Remote ID y sus limitaciones intrínsecas |
+| §1.3 Sistemas anti-dron reales desplegados | DroneShield (DroneSentry, RfPatrol), Dedrone RF-300, Thales RAPIDFire + energía dirigida, AUDS, Rafael Drone Dome |
+| §1.4 Limitaciones fundamentales de los sistemas actuales | Baja SNR (<-6 dB), UAV autónomos sin enlace RF, enjambres/coordinación distribuida, congestión espectral / falsos positivos, generalización entre plataformas |
+| §1.5 Objetivos y contribuciones | Pregunta de investigación explícita + 4 contribuciones numeradas y concretas |
+| §1.6 Estructura del documento | Roadmap de capítulos con referencias cruzadas \ref{} |
+
+**Citas empleadas** (todas presentes en ibliografia.bib): lam_rf-enabled_2023, ezuma_detection_2020, gluge_robust_2024, lacy_machine_2024, out_novel_2025, ezuma_micro-uav_2019.
+
+**Acrónimos usados**: uav, snr, cv-cnn, cfar, hss, stft, wgn — todos definidos en documento.tex.
+
+---
+
+### 10.4 Capítulo 2 — Estado del Arte (REESCRITURA COMPLETA)
+
+**Fichero reescrito**: TFM_documentos/contenidos/20_EstadoDelArte.tex
+
+El fichero anterior contenía mayoritariamente esqueleto de comentarios con muy poco contenido real. Se reemplazó íntegramente con texto académico completo.
+
+**Estructura** (≥13 páginas estimadas en PDF final):
+
+| Sección | Contenido clave |
+|---|---|
+| §2.1 Sistemas de detección RF | Tabla comparativa RF/Radar/EO-IR/Acústico (con ooktabs); análisis de cada modalidad; justificación de RF como elección; representaciones IQ (PSD, espectrograma, IQ crudo); protocolo FHSS con 3 propiedades discriminantes cuantificadas |
+| §2.2 ML para detección RF de UAV | Enfoques clásicos Ezuma (SVM/RF/kNN); CNN-2D sobre espectrogramas (Glüge 2024 como baseline); CNN-1D sobre IQ crudo (Zheng 2025, Rout 2025); Transformers + CBAM + modelos multimodales (Liu 2025, Woo 2018, Baltrusaitis 2018) |
+| §2.3 Redes neuronales de valor complejo | Cálculo de Wirtinger + derivadas ∂f/∂z y ∂f/∂z*; convolución compleja (4 convoluciones reales); CReLU, CBN; ventajas empíricas (+15 pp a baja SNR vs. valor real) |
+| §2.4 Aprendizaje semi-supervisado y etiquetado ruidoso | Origen del label noise en detección RF; DivideMix (Li 2020) con GMM; Teacher-Student con oráculo físico de coherencia temporal FHSS (±15%); MIL con operador noisy-OR |
+| §2.5 Análisis crítico de datasets | Criterios de selección (5 requisitos); DroneRF (descartado: SNR irreal, 99.7% trivial); DroneRFa/b (descartado: solo degradación sintética); UAVSig (descartado: ráfagas presegmentadas); DRFF-R2 (descartado: sesgo DJI); NoisyUAV (seleccionado: satisface todos los criterios) |
+| §2.6 Síntesis y posicionamiento | 3 vacíos de investigación concretos que el trabajo cubre: (1) fase descartada por espectrograma → CV-CNN sobre IQ; (2) desalineación crop temporal → DualStream con CFAR; (3) ausencia de evaluación sistemática en NoisyUAV con CV-CNN |
+
+**Citas empleadas**: ezuma_micro-uav_2019, ezuma_detection_2020, gluge_robust_2024, lam_rf-enabled_2023, martelli_exploitation_2020, oppenheim_discrete_2014, alkama_blind_2005, zheng_deep_2025, out_novel_2025, lacy_machine_2024, liu_transformer-based_2025, woo_cbam_2018, altrusaitis_multimodal_2018, pascanu_difficulty_2013, hirose_complex-valued_2012, hirose_complex_2012, khan_historic_2025, 	rabelsi_deep_2018, zheng_uavsignal_2025, li_dividemix_2020, 
+ajar_comparison_2017, llahham_dronerf_2019, l-sad_rf-based_2019, medaiyese_machine_2021, yu_open_2024, liu_method_2026, zhao_drone_2024, 	iras_crossrf_2025, zheng_multi-scenario_2026, zheng_uav_2025.
+
+---
+
+### 10.5 Activación de la Introducción en documento.tex
+
+Línea modificada en documento.tex (\mainmatter block):
+
+`latex
+% ANTES:
+% \include{contenidos/10_intro}
+
+% DESPUÉS:
+\include{contenidos/10_Introduccion}
+`
+
+---
+
+### 10.6 Directrices de estilo aplicadas (skill research-paper-writer)
+
+La skill IEEE/ACM fue aplicada con las siguientes reglas específicas:
+
+1. **Voz**: tercera persona, formal y objetiva. Sin "nosotros" salvo en contribuciones propias.
+2. **Tiempos verbales**: presente para hechos establecidos; pasado para estudios específicos ("Glüge et al. demostraron que...").
+3. **Cuantificación precisa**: todas las afirmaciones van acompañadas de cifras específicas o citas. Sin "significativamente", "muchos", "en gran medida" sin datos.
+4. **Estructura de párrafo**: topic sentence → evidencia → implicación.
+5. **Related Work (§2)**: organizado por tema, no cronológicamente. Comparación explícita: "A diferencia de [X] que... nuestro enfoque...".
+6. **Identificación de gaps**: cada subsección de datasets concluye con "Justificación de descarte" explícita.
+7. **Vocabulario vetado**: masivo, empírico (injustificado), analítico, peaje, holístico, cabe destacar, es importante señalar, en aras de, no es baladí, operativo (injustificado).
+8. **LaTeX**: \paragraph{...} seguido de \mbox{}\\[0.5em]; figuras con [H]; \cite{} en cada afirmación respaldada.
+
+---
+
+### 10.7 Estado de compilación LaTeX
+
+**Errores pre-existentes** (no atribuibles a los capítulos nuevos, se resuelven en Overleaf):
+- etsi/logo-etsi, etsi/logo-us — logos del template no presentes en local
+- iguras/seccion3/*.png — imágenes referenciadas en 30_EntornoYDatos.tex no commitadas al repo
+- nexos/A_ejemplo.aux — carpeta nexos/ sin crear en local
+
+**Errores corregidos en esta sesión**:
+- \gls{fft} sin definir → añadido al preámbulo de documento.tex
+- Incompatible glue units por $\pm15\,\%$ → corregido a $\pm 15\%$ en 20_EstadoDelArte.tex
+
+---
+
+### 10.8 Estado actualizado del TFM (a 2026-06-17)
+
+| Capítulo | Fichero | Estado |
+|---|---|---|
+| Cap. 1 — Introducción | 10_Introduccion.tex | ✅ Redactado y compilado (nuevo) |
+| Cap. 2 — Estado del Arte | 20_EstadoDelArte.tex | ✅ Reescritura completa |
+| Cap. 3 — Entorno y Datos | 30_EntornoYDatos.tex | ✅ Completado (sesión anterior) |
+| Cap. 4 — Arquitectura | 40_Arquitectura.tex | ✅ Completado (figuras arquitectura pendientes de DualStream) |
+| Cap. 5 — Resultados y Discusión | 50_ResultadosYDiscusion.tex | ✅ Redactado, en revisión final |
+| Cap. 6 — Conclusiones | (pendiente) | ⏳ Pendiente |
+
+---
+
+### 10.9 Reglas de estilo consolidadas (versión actualizada)
+
+1. **Nomenclatura de modelos**: SIEMPRE nombre completo: SingleStream-CVCNN, DualStream-SlidingWindow, DualStream-DynamicSlidingWindow. Nunca v2.1/v2.2.
+2. **\paragraph**: SIEMPRE seguido de \mbox{}\\[0.5em].
+3. **Vocabulario vetado**: masivo, empírico (injustificado), analítico, peaje, holístico, cabe destacar, es importante señalar, en aras de, no es baladí, operativo (injustificado).
+4. **Figuras**: [H] del paquete loat. Nunca [h] o [ht].
+5. **Separación Cap. 4 / Cap. 5**: Cap. 4 NO tiene métricas empíricas. Solo topología, diseño y motivación física.
+6. **Citas**: \cite{key} con claves de ibliografia.bib. Las 55 claves disponibles están listadas y verificadas.
+7. **Figuras de arquitectura**: generadas con matplotlib, fondo blanco, en iguras_arquitectura/.
+8. **Ecuaciones LaTeX**: en modo math, usar \% sin \, antes para evitar Incompatible glue units. Usar $\pm 15\%$ en lugar de $\pm15\,\%$.
+9. **Skill activa**: esearch-paper-writer instalada en .agents/skills/research-paper-writer/. SIEMPRE leer SKILL.md + eferences/writing_style_guide.md al inicio de cualquier sesión de redacción.
+10. **Acrónimos**: verificar con PowerShell que todos los \gls{} usados en contenidos/*.tex están definidos en documento.tex antes de compilar.
