@@ -12,155 +12,53 @@
 \label{sec:contexto}
 % ───────────────────────────────────────────────────────────────────────────────
 
-\lettrine{E}{l} rápido desarrollo de los vehículos aéreos no tripulados, comunmente denominados
-\gls{uav}, ha dado lugar a una transformación directa y muy profunda del
-espacio aéreo de baja altitud. Desde su origen como plataformas exclusivamente
-militares de reconocimiento y ataque de precisión, los \gls{uav} han evolucionado
-hasta convertirse en herramientas de uso cotidiano tanto en aplicaciones civiles, como fotografía aérea, cartografía, agricultura de precisión o reparto de mercancías,
-como en contextos de seguridad y defensa nacional. Según estimaciones del mercado
-global, el número de \gls{uav} civiles en operación superó los 800\,000 en Europa en
-2024, con proyecciones que anticipan una triplicación para el año 2030
-\cite{sesar_outlook_2016}.
+\lettrine{E}{l} rápido desarrollo de los vehículos aéreos no tripulados, comunmente denominados \gls{uav}, ha dado lugar a una transformación directa y muy profunda del espacio aéreo de baja altitud. Desde su origen como plataformas exclusivamente militares de reconocimiento y ataque de precisión, los \gls{uav} han evolucionado hasta convertirse en herramientas de uso cotidiano tanto en aplicaciones civiles, como fotografía aérea, cartografía, agricultura de precisión o reparto de mercancías, como en contextos de seguridad y defensa nacional. Según estimaciones del mercado global, el número de \gls{uav} civiles en operación superó los 800\,000 en Europa en 2024, con proyecciones que anticipan una triplicación para el año 2030 \cite{sesar_outlook_2016}.
 
-Esta proliferación masiva conlleva riesgos cuya gestión eficaz constituye uno
-de los desafíos tecnológicos más relevantes de la década presente. Los incidentes
-en aeropuertos internacionales, como el cierre del Aeropuerto de Gatwick en
-diciembre de 2018 que afectó a más de 140\,000 pasajeros \cite{dft_taking_flight_2019}, ilustran la dimensión
-operativa del problema en entornos civiles. En el ámbito militar, durante los conflictos armados más recientes se ha generalizado el empleo de \gls{uav} para operaciones de reconocimiento, identificación de objetivos y como vectores de ataque. El ejemplo más claro de este cambio de paradigma es la guerra en Ucrania, la cual ha evidenciado el uso sistemático de plataformas comerciales de bajo coste para misiones de vigilancia y guerra electrónica, redefiniendo así las doctrinas de defensa terrestre contemporáneas \cite{lacy_machine_2024}. En este contexto, la detección
-fiable de aeronaves no tripuladas se ha convertido en una capacidad estratégica de
-primer orden.
+Esta proliferación masiva conlleva riesgos cuya gestión eficaz constituye uno de los desafíos tecnológicos más relevantes de la década presente. Los incidentes en aeropuertos internacionales, como el cierre del Aeropuerto de Gatwick (que ocupa el segundo lugar en superficie total y movimiento de parajeros entre todos los aeropuertos de Londres) en diciembre de 2018 que afectó a más de 140\,000 pasajeros \cite{dft_taking_flight_2019}, ilustran la dimensión operativa del problema en entornos civiles. En el ámbito militar, durante los conflictos armados más recientes se ha generalizado el empleo de drones para operaciones de reconocimiento, identificación de objetivos y como vectores de ataque. El ejemplo más claro es la actual guerra en Ucrania, la cual ha evidenciado el uso sistemático de plataformas comerciales de bajo coste para misiones de vigilancia y guerra electrónica, así como su adaptación para el lanzamiento de cargas explosivas y su empleo en ataques de impacto directo, redefiniendo así las doctrinas de defensa terrestre contemporáneas \cite{lacy_machine_2024}. En este contexto, la detección fiable de drones se ha convertido en una capacidad estratégica de primer orden.
 
-Los sistemas de contención de \gls{uav}, conocidos en la literatura como sistemas
-\textit{Counter-UAS} (C-UAS) o anti-dron, abarcan un espectro de tecnologías
-heterogéneas. Los enfoques basados en señales de radiofrecuencia (\gls{psd}, \gls{snr},
-espectros IQ) han emergido como los más adecuados para su despliegue en entornos
-congestionados desde el punto de vista electromagnético, donde otras modalidades,
-como radar activo, sensores electroópticos o detección acústica, presentan limitaciones
-operativas fundamentales \cite{ezuma_micro-uav_2019, ezuma_detection_2020}. Sin embargo, los enfoques convencionales de detección RF
-exhiben una degradación severa del rendimiento cuando la \gls{snr} de la señal objetivo
-desciende por debajo de los $-6$\,dB, umbral que caracteriza los escenarios de
-operación encubierta, vuelo a larga distancia o interferencia deliberada.
+Los sistemas de contención de \gls{uav}, conocidos en la literatura como sistemas \gls{c-uas} o anti-dron, abarcan un espectro muy amplio de distintas tecnologías. Los enfoques basados en señales de radiofrecuencia (RF) han emergido como los más adecuados para su despliegue en entornos críticos debido a su velocidad de respuesta, robustez y capacidad de detección sin necesidad de línea de visión directa y desde una distancia sustancialmente mayor en comparación con otras modalidades (como radar activo, sensores electroópticos o detección acústica), que presentan limitaciones operativas fundamentales \cite{ezuma_micro-uav_2019, ezuma_detection_2020}. Sin embargo, según diversos autores, los enfoques convencionales de detección por RF exhiben una degradación severa del rendimiento cuando la \gls{snr} de la señal objetivo desciende por debajo de los $0$\,dB, umbral que caracteriza los escenarios de operación encubierta, vuelo a larga distancia o entornos con mucha interferencia \cite{ezuma_detection_2020, flak_rf_2023, ozturk_rf-based_2021}.
 
-El presente \textit{Trabajo Fin de Máster} (TFM) aborda precisamente este reto:
-desarrollar y evaluar un sistema de detección de \gls{uav} basado en el análisis de
-señales de radiofrecuencia en bruto, formato en cuadratura (IQ), mediante técnicas
-de aprendizaje profundo, con énfasis específico en la robustez bajo condiciones de
-baja \gls{snr}. El trabajo propone y evalúa una familia de arquitecturas de redes
-neuronales de valor complejo (\gls{cv-cnn}) que operan directamente sobre la señal IQ,
-preservando la información de fase, y las combina con características físicas
-extraídas mediante un detector energético adaptativo tipo \gls{cfar}.
+El presente Trabajo Fin de Máster aborda precisamente este reto: desarrollar y evaluar un sistema de detección de \gls{uav} basado en el análisis de señales de radiofrecuencia en bruto (como señales en fase y cuadratura, I/Q), mediante técnicas de \textit{machine learning} y \textit{deep learning}, con énfasis específico en la robustez bajo condiciones de baja \gls{snr}. Esta investigación propone y evalúa una familia de arquitecturas de redes neuronales de valor complejo (\gls{cv-cnn}) que operan directamente sobre la señal I/Q.
 
 % ───────────────────────────────────────────────────────────────────────────────
 \section{Situación actual: implicaciones en defensa, privacidad y seguridad}
 \label{sec:situacion_actual}
 % ───────────────────────────────────────────────────────────────────────────────
 
-La proliferación de \gls{uav} de bajo coste ha generado un conjunto de amenazas
-transversales que trascienden los límites del ámbito militar y afectan a la
-seguridad pública, la privacidad individual y la protección de infraestructuras
-críticas. A continuación se describen los vectores de riesgo más relevantes
-identificados en la literatura reciente.
+Como se ha comentado anteriormente, el uso a gran escala de drones de bajo coste ha generado un conjunto de amenazas transversales que trascienden los límites del ámbito militar y afectan a la seguridad pública, la privacidad y la protección de infraestructuras críticas. A continuación se describen los casos de riesgo más relevantes identificados en la literatura reciente.
 
 \paragraph{Vigilancia no autorizada y vulneración de la privacidad.}\mbox{}\\[0.5em]
-Los \gls{uav} equipados con cámaras de alta resolución y sensores térmicos constituyen
-una herramienta de vigilancia encubierta de bajo coste y difícil detección. Incidentes
-documentados incluyen el sobrevuelo sistemático de instalaciones militares en varios
-países de la OTAN, la captación de imágenes sobre centros penitenciarios para
-facilitar el contrabando y la monitorización de eventos de masas sin autorización
-administrativa. El marco regulatorio europeo, establecido por el Reglamento
-(UE) 2019/945 de la Agencia Europea de Seguridad Aérea (EASA), clasifica los
-\gls{uav} según su riesgo operacional e impone obligaciones de registro e
-identificación electrónica a distancia; sin embargo, la brecha entre la norma y la
-capacidad tecnológica de verificación sigue siendo significativa
-\cite{ezuma_detection_2020}.
+Los drones equipados con cámaras de alta resolución y sensores térmicos constituyen una herramienta de vigilancia encubierta de bajo coste y difícil detección. Incidentes documentados incluyen el sobrevuelo sistemático de instalaciones militares en varios países de la OTAN, la captación de imágenes sobre centros penitenciarios o la monitorización de eventos de masas sin autorización administrativa. El marco regulatorio europeo, establecido por el Reglamento (UE) 2019/945 de la Agencia Europea de Seguridad Aérea (EASA), clasifica los \gls{uav} según su riesgo operacional e impone obligaciones de registro e identificación electrónica a distancia; sin embargo, la brecha entre la norma y la capacidad tecnológica de verificación sigue siendo significativa \cite{ezuma_detection_2020}.
 
-\paragraph{Uso como vector de ataque.}\mbox{}\\[0.5em]
-El empleo de \gls{uav} como vectores de ataque directo, incluyendo modelos kamikazes
-de bajo coste denominados \textit{First Person View} (FPV), se ha consolidado como
-una táctica recurrente en conflictos asimétricos modernos. Organismos como el
-Departamento de Defensa de los Estados Unidos y el Estado Mayor Conjunto de las
-Fuerzas Armadas Españolas han identificado la proliferación de enjambres de
-\gls{uav} como una de las amenazas emergentes de mayor prioridad para los próximos
-lustros \cite{dod_cuas_2021}. Un enjambre de tan solo diez \gls{uav} comerciales, coordinados mediante
-protocolos distribuidos, es capaz de saturar los sistemas de defensa convencionales
-diseñados para tratar amenazas individuales.
+\paragraph{Uso como vector de ataque.}\mbox{}\\[0.5em] 
+El empleo de drones como vectores de ataque directo, incluyendo tácticas de ataque directo o \textit{kamikazes}, se ha consolidado como una táctica recurrente en conflictos modernos. Organismos como el Departamento de Defensa de los Estados Unidos y el Estado Mayor Conjunto de las Fuerzas Armadas Españolas han identificado el aumento de enjambres de \gls{uav}s como una de las amenazas emergentes de mayor prioridad para las próximas décadas \cite{dod_cuas_2021}. Los ataques mediante enjambres de drones comerciales, coordinados mediante protocolos de comunicación distribuidos, son capaces de saturar los sistemas de defensa convencionales diseñados principalmente para tratar amenazas individuales, desbordando su capacidad operativa simultánea.
 
-\paragraph{Perturbación de infraestructuras críticas.}\mbox{}\\[0.5em]
-Los aeropuertos, las plantas nucleares, los centros de datos y los sistemas de
-generación eléctrica constituyen objetivos susceptibles a la perturbación inducida
-por \gls{uav}. La proximidad de un \gls{uav} a la trayectoria de aterrizaje de una
-aeronave comercial puede derivar en colisión con motores o superficies de control,
-con consecuencias potencialmente catastróficas. El Aeropuerto Heathrow de Londres
-registró 93 incidentes de acercamientos no autorizados de \gls{uav} solo en 2023,
-cifra que ilustra la magnitud del problema en entornos aeroportuarios de alta
-densidad \cite{gluge_robust_2024}.
+\paragraph{Perturbación de infraestructuras críticas.}\mbox{}\\[0.5em] 
+Los aeropuertos, las plantas nucleares, los centros de datos y los sistemas de generación eléctrica constituyen algunos objetivos susceptibles a la perturbación inducida por estos dispositivos. La proximidad de un \gls{uav} a la trayectoria de aterrizaje de una aeronave comercial puede derivar en colisión con motores o superficies de control, con consecuencias potencialmente catastróficas. El Aeropuerto Heathrow de Londres registró 93 incidentes de acercamientos no autorizados de drones solo en 2023, cifra que demuestra la magnitud del problema en el caso de entornos aeroportuarios concurridos \cite{gluge_robust_2024}.
 
-\paragraph{Marco regulatorio y limitaciones vigentes.}\mbox{}\\[0.5em]
-La respuesta regulatoria a esta problemática ha avanzado de forma desigual a escala
-global. La EASA introdujo en enero de 2021 un marco de identificación remota
-obligatoria (\textit{Remote ID}) que exige la emisión periódica de un identificador
-único por parte de todo \gls{uav} en vuelo \cite{easa_remoteid_2021}. Sin embargo, este mecanismo es trivialmente
-eludible por operadores malintencionados que desactiven el módulo correspondiente,
-y no proporciona ninguna capacidad de detección autónoma por parte de los sistemas
-de seguridad. Esta limitación intrínseca del enfoque regulatorio refuerza la
-necesidad de sistemas de detección tecnológicamente robustos e independientes de la
-colaboración del operador.
+\paragraph{Marco regulatorio y limitaciones vigentes.}\mbox{}\\[0.5em] 
+La respuesta regulatoria a esta problemática ha avanzado de forma desigual a escala global. La EASA introdujo en enero de 2021 un marco de identificación remota obligatoria que exige la emisión periódica de un identificador único por parte de todo drones en vuelo \cite{easa_remoteid_2021}. Sin embargo, este mecanismo es trivialmente eludible por operadores que desactiven el módulo correspondiente, y no proporciona ninguna capacidad de detección autónoma por parte de los sistemas de seguridad. Esta limitación intrínseca del enfoque regulatorio refuerza la necesidad de sistemas de detección tecnológicamente robustos e independientes de la colaboración del operador del dispositivo.
 
-Para hacer frente a estas amenazas emergentes, han surgido aproximaciones tecnológicas heterogéneas basadas en radares, sensores acústicos, cámaras electroópticas y receptores de radiofrecuencia. El análisis detallado de estas tecnologías y de las principales plataformas comerciales y militares actuales se aborda en el Capítulo~\ref{cap:EstadoDelArte}. No obstante, la mayoría de estos sistemas se enfrentan a severas limitaciones operativas en entornos electromagnéticamente adversos que motivan el presente trabajo.
+El análisis detallado de las tecnologías actuales para solventar este tipo de problemas mencionados anteriormente, y las principales plataformas comerciales y militares actuales se aborda en el Capítulo~\ref{cap:EstadoDelArte}.
 
 % ───────────────────────────────────────────────────────────────────────────────
 \section{Limitaciones fundamentales de los enfoques basados en RF}
 \label{sec:limitaciones}
 % ───────────────────────────────────────────────────────────────────────────────
 
-A pesar de los avances reseñados, los sistemas C-UAS basados en radiofrecuencia presentan
-un conjunto de limitaciones estructurales que condicionan su eficacia en escenarios
-operativos reales. La identificación precisa de estas limitaciones constituye el
-punto de partida que motiva la investigación desarrollada en este trabajo.
+A pesar de los avances reseñados, los sistemas C-UAS basados en radiofrecuencia presentan un conjunto de limitaciones estructurales que condicionan su eficacia en escenarios operativos reales. Su constituye el punto de partida que motiva la investigación llevada a cabo en este trabajo.
 
 \paragraph{Degradación del rendimiento en baja SNR.}\mbox{}\\[0.5em]
-Los sistemas basados en análisis RF exhiben una pérdida de rendimiento acusada cuando
-la \gls{snr} de la señal objetivo desciende por debajo de un umbral crítico, típicamente
-situado entre $-4$ y $-8$\,dB en función de la arquitectura empleada. En este
-régimen, los detectores de energía convencionales no consiguen distinguir la señal
-del \gls{uav} del ruido de fondo electromagnético, en particular cuando coexisten fuentes
-de interferencia como redes Wi-Fi, dispositivos Bluetooth y señales \gls{awgn}. Esta
-limitación es especialmente pronunciada cuando el \gls{uav} opera a distancias superiores
-a los 300\,m o en entornos urbanos con alta densidad espectral de interferentes
-\cite{gluge_robust_2024, lacy_machine_2024}.
+Los sistemas basados en análisis RF, tal y como se ha expuesto anteriormente, exhiben una pérdida de rendimiento muy notable cuando la \gls{snr} de la señal objetivo desciende por debajo de valores positivos. En este régimen, los detectores de energía convencionales no consiguen distinguir la señal del \gls{uav} del ruido de fondo electromagnético, en particular cuando coexisten fuentes de interferencia como redes Wi-Fi, dispositivos Bluetooth y señales \gls{awgn}. Esta limitación es especialmente pronunciada cuando el \gls{uav} opera a distancias superiores a los 300\,m o en entornos urbanos con alta densidad espectral de interferentes \cite{gluge_robust_2024, lacy_machine_2024}.
 
 \paragraph{Proliferación de enjambres y coordinación distribuida.}\mbox{}\\[0.5em]
-Las arquitecturas de ataque mediante enjambres de \gls{uav}, que distribuyen la
-funcionalidad entre múltiples unidades de bajo coste en lugar de concentrarla en
-una plataforma singular, representan un vector de amenaza cualitativamente distinto
-al que los sistemas C-UAS actuales no se encuentran optimizados para responder. La
-coordinación entre unidades puede realizarse mediante protocolos de comunicación
-de malla de baja potencia, en frecuencias fuera de las bandas convencionales de
-supervisión, o incluso de forma completamente offline mediante algoritmos de
-enjambre predeterminados. La respuesta eficaz a esta amenaza requiere sistemas
-capaces de procesar múltiples señales simultáneas con tiempos de latencia reducidos.
+Las arquitecturas de ataque mediante enjambres de \gls{uav}, que distribuyen la funcionalidad entre múltiples unidades de bajo coste en lugar de concentrarla en una plataforma singular, representan un vector de amenaza cualitativamente distinto al que los sistemas C-UAS actuales no se encuentran optimizados para responder. La coordinación entre unidades puede realizarse mediante protocolos de comunicación de malla de baja potencia, en frecuencias fuera de las bandas convencionales de supervisión, o incluso de forma completamente offline mediante algoritmos de enjambre predeterminados. La respuesta eficaz a esta amenaza requiere sistemas capaces de procesar múltiples señales simultáneas con tiempos de latencia reducidos.
 
 \paragraph{Congestión espectral y falsos positivos.}\mbox{}\\[0.5em]
-En entornos urbanos densamente poblados, el espectro electromagnético en las bandas
-de 2,4\,GHz y 5,8\,GHz está saturado por dispositivos Wi-Fi, Bluetooth, teléfonos
-inteligentes y otros sistemas que emiten señales espectralmente similares a las de
-los protocolos de control de \gls{uav}. Los sistemas C-UAS convencionales presentan
-tasas de falsos positivos elevadas en estos entornos, lo que los hace operativamente
-inviables para su despliegue en zonas metropolitanas sin intervención humana
-continua. La tasa de falsas alarmas es un parámetro crítico en las especificaciones
-militares de sistemas de defensa, dado que la neutralización de un objetivo
-legítimamente identificado como amenaza, como una aeronave comercial, puede tener
-consecuencias catastróflicas.
+En entornos urbanos densamente poblados, el espectro electromagnético en las bandas de 2,4\,GHz y 5,8\,GHz está saturado por dispositivos Wi-Fi, Bluetooth, teléfonos inteligentes y otros sistemas que emiten señales espectralmente similares a las de los protocolos de control de \gls{uav}. Los sistemas C-UAS convencionales presentan tasas de falsos positivos elevadas en estos entornos, lo que los hace operativamente inviables para su despliegue en zonas metropolitanas sin intervención humana continua. La tasa de falsas alarmas es un parámetro crítico en las especificaciones militares de sistemas de defensa, dado que la neutralización de un objetivo legítimamente identificado como amenaza, como una aeronave comercial, puede tener consecuencias catastróflicas.
 
-\paragraph{Limitaciones de generalización entre plataformas.}\mbox{}\\[0.5em]
-Los sistemas basados en bases de datos de firmas espectrales estáticas requieren
-actualización continua ante la aparición de nuevos modelos de \gls{uav}, tarea que
-resulta inviable a la escala de la proliferación actual del mercado. Los enfoques
-de aprendizaje automático que aprenden representaciones genéricas de las señales,
-en lugar de depender de firmas preprogramadas, ofrecen una mayor robustez frente
-a plataformas desconocidas, aunque su eficacia disminuye notablemente cuando la
-\gls{snr} disponible no permite la extracción de rasgos discriminativos fiables
-\cite{ezuma_micro-uav_2019}.
+\paragraph{Limitaciones de generalización entre plataformas.}\mbox{}\\[0.5em] 
+Los sistemas basados en bases de datos de firmas espectrales estáticas requieren actualización continua ante la aparición de nuevos modelos de \gls{uav}, tarea que resulta inviable a la escala de la proliferación actual del mercado. Los enfoques de aprendizaje automático que aprenden representaciones genéricas de las señales, en lugar de depender de firmas preprogramadas, ofrecen una mayor robustez frente a plataformas desconocidas, aunque su eficacia disminuye notablemente cuando la \gls{snr} disponible no permite la extracción de rasgos discriminativos fiables \cite{ezuma_micro-uav_2019}.
 
 % ───────────────────────────────────────────────────────────────────────────────
 \section{Objetivos y contribuciones del trabajo}
