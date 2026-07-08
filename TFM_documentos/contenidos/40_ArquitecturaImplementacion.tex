@@ -1,0 +1,528 @@
+\chapter{Arquitectura e Implementación del Sistema}
+\label{cap:arquitectura}
+
+\lettrine[lraise=-0.1, lines=2, loversize=0.2]{L}{a} detección y clasificación robusta de drones que transmiten en bandas no licenciadas y con relaciones señal a ruido extremas requiere un diseño cuidadoso que combine el análisis de señales clásico con el reconocimiento de patrones moderno que ofrecen el \textit{Deep Learning}, \gls{ml} e IA. Debido a la complejidad inherente al problema y a las limitaciones de aplicar enfoques genéricos sobre la banda ISM de 2.4\,GHz, durante esta investigación se han explorado y comparado empíricamente distintas familias de arquitecturas basadas en modelos de \gls{ml} que tienen como eje central las redes neuronales convolucionales de valores complejos (\gls{cv-cnn}), descritas en el Capítulo \ref{cap:MarcoTeorico}. 
+
+
+Este capítulo detalla la metodología y el diseño de los sistemas implementados, presentando una evolución lógica desde las aproximaciones más básicas hasta la solución final propuesta. Se describe el motor de preprocesamiento analítico común (el detector de ráfagas basado en entropía espectral), cuyo funcionamiento fundamenta el resto de los subsistemas. A continuación se detalla la arquitectura, el flujo de datos y el proceso de entrenamiento de cada una de las aproximaciones del clasificador basado en redes neuronales \gls{cv-cnn}: una versión inicial que únicamente toma los flujos de la señal IQ, distintas variaciones sobre este modelo base modificando levemente su arquitectura y lógica de entrenamiento y versiones avanzadas que, además de la señal IQ, también toman información de la densidad espectral de potencia de las transmisiones para hacer la inferencia. 
+
+\section{Preprocesamiento Analítico: Detector de Entropía}
+\label{sec:preprocesamiento_analitico}
+
+Este bloque funcional actúa como una fase de preprocesamiento que no evalúa la naturaleza del emisor, sino que rastrea la serie temporal para aislar las regiones de interés (\gls{roi}) con concentración espectral anómala de forma determinista, proporcionando contexto al clasificador posterior.
+
+\subsection{Pipeline de detección en cuatro etapas}
+\label{subsec:pipeline_detector}
+
+El detector se estructura en cuatro etapas secuenciales que transforman la señal I/Q cruda en una lista de intervalos temporales candidatos a transmisión activa. A continuación se detallan cada una de las cuatro fases.
+
+\subsubsection{Etapa 1: cálculo de la entropía blanqueada y \textit{bins} frecuenciales activos}
+
+A partir de la señal compleja $s[n]$, se obtiene la \gls{stft} y se aplica el blanqueo espectral (Ecuación~\ref{eq:whitening}). Sobre el espectro blanqueado $\tilde{P}_{k,m}$, se computa la curva de entropía $H(m)$ (Ecuación~\ref{eq:entropia_shannon}) y, de forma paralela, el vector de \textit{bins} activos $n_{\text{act}}(m)$:
+
+\begin{equation}
+    n_{\text{act}}(m) = \sum_{k=0}^{N_w-1} \mathbf{1}\!\left[\tilde{P}_{k,m} > \beta\right]
+    \label{eq:bins_activos}
+\end{equation}
+
+Para fundamentar estadísticamente este umbral $\beta$, es necesario analizar la distribución probabilística de la densidad espectral de potencia bajo la hipótesis nula ($\mathcal{H}_0$), es decir, asumiendo que el canal contiene únicamente ruido térmico. El ruido en banda base se modela como un proceso Gaussiano Complejo Circularmente Simétrico (\gls{cscg}) $n[m] \sim \mathcal{CN}(0, \sigma^2)$, compuesto por dos procesos gaussianos reales independientes para las componentes en fase y cuadratura \cite{kay_fundamentals_1998}.
+
+Dado que la Transformada de Fourier es un operador estrictamente lineal, el ruido proyectado en cada \textit{bin} de frecuencia $k$ sigue teniendo una distribución compleja gaussiana $N_k \sim \mathcal{CN}(0, \sigma_N^2)$. Por lo tanto, sus partes real e imaginaria se distribuyen como:
+
+\begin{equation}
+    N_{k,R} \sim \mathcal{N}\left(0, \frac{\sigma_N^2}{2}\right), \quad N_{k,I} \sim \mathcal{N}\left(0, \frac{\sigma_N^2}{2}\right)
+\end{equation}
+
+La potencia espectral en el \textit{bin} $k$ se define como el módulo al cuadrado del fasor complejo: $P_k = |N_k|^2 = N_{k,R}^2 + N_{k,I}^2$. La suma de los cuadrados de dos variables aleatorias gaussianas independientes e idénticamente distribuidas sigue una distribución Chi-cuadrado con 2 grados de libertad ($\chi^2_2$). Una distribución $\chi^2_2$ escalada es algebraicamente equivalente a una distribución exponencial \cite{kay_fundamentals_1998}. La potencia $P_k$ sigue por tanto una distribución exponencial de parámetro $\lambda$:
+
+\begin{equation}
+    P_k \sim \text{Exp}(\lambda) \implies f_{P}(x) = \lambda e^{-\lambda x}, \quad x \ge 0
+\end{equation}
+
+En la etapa de blanqueo espectral, la señal se normaliza empleando la mediana del ruido de fondo en lugar de la media, dotando al sistema de mayor robustez frente a valores atípicos como se explicó en el Capítulo \ref{cap:MarcoTeorico}. Sabiendo que la función de distribución acumulada de una exponencial es $F_P(x) = 1 - e^{-\lambda x}$, la mediana $P_{\text{med}}$ se obtiene igualando la probabilidad acumulada a $0.5$:
+
+\begin{equation}
+    1 - e^{-\lambda P_{\text{med}}} = 0.5 \implies e^{-\lambda P_{\text{med}}} = 0.5 \implies P_{\text{med}} = \frac{\ln 2}{\lambda}
+\end{equation}
+
+El algoritmo marca un \textit{bin} como activo si su potencia normalizada $\tilde{P}_k = P_k / P_{\text{med}}$ supera el multiplicador de fondo $\beta$ (siendo $\beta = 4$ el valor por defecto). La probabilidad de falsa alarma ($P_{\text{FA}}$), es decir, la probabilidad de que un \textit{bin} de ruido puro supere accidentalmente este umbral, se calcula evaluando la distribución exponencial:
+
+\begin{equation}
+    P_{\text{FA}} = \mathbb{P}\left(P_k > \beta P_{\text{med}}\right) = \int_{\beta \frac{\ln 2}{\lambda}}^{\infty} \lambda e^{-\lambda x} dx = e^{-\lambda \left(\beta \frac{\ln 2}{\lambda}\right)} = e^{-\beta \ln 2}
+\end{equation}
+
+Por las propiedades de los logaritmos naturales ($e^{-x \ln y} = y^{-x}$), la expresión se simplifica a un resultado exacto e independiente de la varianza del ruido del receptor:
+
+\begin{equation}
+    P_{\text{FA}} = 2^{-\beta}
+\end{equation}
+
+Finalmente, considerando que la ventana de la STFT contiene $N_w$ \textit{bins} independientes, el número esperado de \textit{bins} activos bajo la hipótesis nula se modela como el valor esperado de una distribución binomial, resultando en:
+
+\begin{equation}
+    \mathbb{E}\!\left[n_{\text{act}} \mid \mathcal{H}_0\right] = N_w \cdot P_{\text{FA}} = N_w \cdot 2^{-\beta} = 2048 \cdot 2^{-4} = 128 \text{ \textit{bins}}
+    \label{eq:bins_activos_ruido}
+\end{equation}
+
+Este valor teórico permite discriminar las transmisiones de los drones, que activan un pequeño número de \textit{bins} adicionales en torno a la portadora, de las interferencias de banda ancha, como el estándar IEEE~802.11, usando tramas con una modulación \gls{ofdm}, que activan aproximadamente la totalidad del canal \cite{ezuma_detection_2020}.
+
+\subsubsection{Etapa 2: Suavizado gaussiano temporal}
+
+La curva de entropía $H(m)$ presenta fluctuaciones \textit{frame} a \textit{frame} producidas por la varianza estadística de la estimación \gls{stft}, las cuales se agravan conforme la \gls{snr} va decayendo. Para regularizar la detección, se aplica un filtro Gaussiano unidimensional cuya desviación típica se parametriza matemáticamente como $\sigma_s = \tau_s / \Delta t$ (donde $\tau_s$ representa la constante temporal de suavizado).
+
+\begin{equation}
+    H_s(m) = \left(H * g_{\sigma_s}\right)(m)
+    \label{eq:suavizado}
+\end{equation}
+
+El valor por defecto $\tau_s = 0.2$\,ms equivale a aproximadamente 3 \textit{frames}, con lo que se eliminan los mínimos espurios de duraciones menores a un milisegundo sin distorsionar los bordes de los saltos \gls{fhss} producidos por las transmisiones de los drones.
+
+\subsubsection{Etapa 3: CFAR adaptativo}
+
+La tercera etapa implementa un umbral de tasa de falsa alarma constante, \gls{cfar}, que garantiza una tasa de falsa alarma controlada independientemente del nivel de ruido local \cite{zhang_entropy-based_1989}. Se adoptan dos estimadores robustos que evitan los sesgos de los estadísticos clásicos frente a \textit{outliers} \cite{hampel_robust_1986}:
+
+\begin{itemize}\itemsep 0em
+    \item Suelo de ruido local a partir del percentil~90 usando una ventana deslizante: la línea base temporal $\widehat{H}_{90}(m)$ se estima como el percentil~90 de $H_s$ en una ventana temporal con una anchura aproximada de $15$\,ms. El uso del percentil~90 en lugar de la media garantiza que, siempre que las ráfagas \gls{fhss} representen menos del 10\,\% de los \textit{frames} de la ventana (condición siempre satisfecha dada la baja ocupación temporal demostrada en la Tabla~\ref{tab:ocupacion_temporal}), el estimador permanezca anclado sobre los \textit{frames} de ruido puro \cite{vasant_ahirrao_rf-based_2024}.
+
+     \item Dispersión robusta (MAD): la desviación estándar del suelo de ruido $\sigma_n$ se estima mediante la Desviación Absoluta respecto a la Mediana (\gls{mad}). Esta métrica se convierte a equivalente gaussiano multiplicando por el factor analítico $1.4826$.
+\end{itemize}
+
+Dado que el objetivo es utilizar esta estimación como parámetro de entrada para un umbral \gls{cfar} estadístico, conviene fundamentar de dónde surge dicho multiplicador. A diferencia de la desviación típica muestral, que emplea sumas de cuadrados y es extremadamente vulnerable a la presencia de valores atípicos, la métrica MAD calcula la dispersión en el dominio de la norma L1\footnote{Matemáticamente, operar en el dominio de la norma L1 implica evaluar las distancias de forma estrictamente lineal ($|x - y|$), a diferencia de la varianza clásica que emplea la norma L2 o distancias euclídeas al cuadrado ($(x - y)^2$). Al no elevar el error de desviación al cuadrado, la métrica MAD evita que los valores atípicos, que en este caso son ráfagas de alta energía centradas en una región espectral determinada, adquieran un peso exponencial que corrompa la estimación del suelo de ruido.} utilizando medianas anidadas:
+\begin{equation}
+    \operatorname{MAD}(H_s) = \operatorname{median}_m\!\left|H_s(m) - \operatorname{median}(H_s)\right|
+    \label{eq:mad_def}
+\end{equation}
+
+Bajo la hipótesis de una distribución normal $X \sim \mathcal{N}(0, \sigma^2)$ libre de valores atípicos, el valor poblacional de la MAD corresponde a la mediana de una variable aleatoria semi-normal, que resulta de aplicar valor absoluto a una v.a. normal centrada en cero y desviación estándar $\sigma$, $|X|$. Por definición, se busca el valor tal que el área bajo la curva sea del 50\,\%:
+
+\begin{equation}
+    \mathbb{P}(|X| \le \operatorname{MAD}) = \Phi\left(\frac{\operatorname{MAD}}{\sigma}\right) - \Phi\left(-\frac{\operatorname{MAD}}{\sigma}\right) = \frac{1}{2}
+\end{equation}
+
+Donde $\Phi(\cdot)$ representa la función de distribución acumulada de la normal estándar. Aplicando la simetría de la distribución ($\Phi(-z) = 1 - \Phi(z)$), la expresión se simplifica a:
+
+\begin{equation}
+    2\Phi\left(\frac{\operatorname{MAD}}{\sigma}\right) - 1 = \frac{1}{2} \implies \Phi\left(\frac{\operatorname{MAD}}{\sigma}\right) = 0.75
+\end{equation}
+
+Despejando, se demuestra que el valor de la MAD guarda una relación estricta y constante con la desviación típica $\sigma$ mediante la inversa de la función de distribución, que es la función cuantil:
+
+\begin{equation}
+    \frac{\operatorname{MAD}}{\sigma} = \Phi^{-1}(0.75) \approx 0.674489
+\end{equation}
+
+Para obtener un estimador insesgado de la desviación del ruido ($\hat{\sigma}_n$) a partir de la estadística robusta MAD, basta con invertir la constante de proporcionalidad matemática:
+
+\begin{equation}
+    \hat{\sigma}_n = \frac{1}{\Phi^{-1}(0.75)} \operatorname{MAD}(H_s) \approx 1.4826 \cdot \operatorname{MAD}(H_s)
+    \label{eq:mad_escala}
+\end{equation}
+
+Esta derivación analítica justifica el uso del factor $1.4826$, el cual dota a $\hat{\sigma}_n$ de un punto de ruptura (\textit{breakdown point}) del~50\,\% \cite{hampel_robust_1986}, garantizando que la estimación del ruido no colapse ni siquiera en el caso extremo de que el 49\,\% de los \textit{frames} de la ventana temporal contuvieran saltos FHSS.
+
+\vspace{\baselineskip}
+
+El umbral de detección \textit{frame} a \textit{frame} se define como:
+
+\begin{equation}
+    \tau(m) = \widehat{H}_{90}(m) - z \cdot \hat{\sigma}_n
+    \label{eq:umbral_cfar}
+\end{equation}
+
+donde $z$ es el parámetro de sensibilidad. Interpretando $H_s(m)$ como una variable gaussiana bajo la hipótesis nula $\mathcal{H}_0$, la probabilidad de falsa alarma por \textit{frame} es $P_{\text{fa}} = 1 - \Phi(z)$, donde $\Phi(\cdot)$ denota la función de distribución acumulada de la gaussiana estándar \cite{kay_fundamentals_1998}. Para el valor por defecto $z = 3.0$, se obtiene $P_{\text{fa}} \approx 0.13$\,\% por \textit{frame}, lo que implica aproximadamente 1.3 falsas alarmas esperadas por archivo de 75\,ms antes de aplicar el filtrado morfológico posterior.
+
+\subsubsection{Etapa 4: Posprocesado morfológico y extracción de candidatos}
+
+La máscara binaria de detección $M(m) = \mathbf{1}[H_s(m) < \tau(m)]$ se somete a dos operaciones morfológicas clásicas de procesado de señal unidimensional \cite{olesinski_radio_2023}:
+
+\begin{enumerate}\itemsep 0em
+    \item Erosión binaria con elemento estructurante de $\lceil 0.5\,\text{ms}/\Delta t \rceil$ \textit{frames}: elimina detecciones espurias de duración inferior a $0.5$\,ms. Este umbral es conservador y seguro para filtrar ruido impulsivo, ya que, como se puede observar en la tabla \ref{tab:distribucion_muestras}, el salto \gls{fhss} más corto registrado en todo el conjunto de datos tiene una duración de $1.30$\,ms (correspondiente al modelo Turnigy 9X).
+
+    \item Dilatación binaria con elemento estructurante de $\lceil 1.0\,\text{ms}/\Delta t \rceil$ \textit{frames}: fusiona segmentos separados por menos de $1.0$\,ms. Esta operación se justifica físicamente por el hecho de que las imperfecciones analógicas en los osciladores locales y los efectos transitorios de los amplificadores de potencia pueden inducir fluctuaciones rápidas en la envoltura de la señal, provocando pequeñas discontinuidades artificiales en la transmisión de un único salto \gls{fhss} \cite{ezuma_micro-uav_2019, ezuma_detection_2020}.
+\end{enumerate}
+
+Tras etiquetar las regiones, el detector extrae exclusivamente los metadatos necesarios para aislar temporalmente cada candidato: instantes de inicio y fin ($t_0$, $t_1$), duración $T_b = t_1 - t_0$, caída de entropía $\Delta H_b$ respecto al suelo local, el número de \textit{bins} espectrales activos concurrentes ($n_{\text{act}}$), y la puntuación estándar o \textit{z-score} del pico de detección ($z_{\text{peak}}$). Este último parámetro se calcula formalmente evaluando la profundidad máxima de la caída de entropía frente al ruido de fondo, tal como se expresa en la Ecuación \ref{eq:z_peak}:
+
+\begin{equation}
+    z_{\text{peak}} = \frac{H_s(m^*) - \widehat{H}_{90}(m^*)}{\hat{\sigma}_n}
+    \label{eq:z_peak}
+\end{equation}
+
+donde $m^*$ representa el índice temporal del \textit{frame} en el que la entropía de la señal ($H_s$) alcanza su mínimo local. Puesto que la presencia de un patrón electromagnético determinista concentra la energía y, por ende, reduce la entropía muy por debajo del suelo de ruido estimado ($\widehat{H}_{90}$), el numerador resultante de esta operación es siempre un valor estrictamente negativo. Valores más negativos de $z_{\text{peak}}$ indican anomalías probabilísticas más severas frente a la hipótesis nula del ruido térmico. La fundamentación matemática y la utilidad de este parámetro se abordan en la siguiente etapa como criterio de filtrado estadístico. A diferencia de los enfoques de \textit{Machine Learning} clásico, en esta etapa no se realiza extracción de características estadísticas de la serie temporal (curtosis, varianza, etc.), delegando el aprendizaje representacional profundo directamente a la red neuronal.
+
+\subsection{Mecanismos de rechazo de interferencias}
+\label{subsec:filtros_rechazo}
+
+Además del umbral dinámico CFAR y la erosión morfológica previamente descrita, el detector implementa dos mecanismos de rechazo adicionales para discriminar los saltos \gls{fhss} provenientes de drones de las interferencias espurias \cite{ezuma_detection_2020}:
+
+\begin{itemize}\itemsep 0em
+    \item Filtro de significancia estadística mínima ($|z_{\text{peak}}| \ge 4.0$): se exige que la profundidad de la caída de entropía alcance una lejanía probabilística extrema frente al suelo de ruido local. Dado que $\hat{\sigma}_n$ aproxima la desviación típica poblacional del ruido, el estadístico $z_{\text{peak}}$ se modela bajo la hipótesis nula como una variable normal estándar $Z \sim \mathcal{N}(0, 1)$. La probabilidad de que una fluctuación aleatoria del ruido iguale o supere una desviación de 4 sigmas en una sola cola poblacional (caída de entropía) viene dada por el p-valor:
+    \begin{equation}
+        p = \mathbb{P}(Z \le -4.0) = \Phi(-4.0) \approx 3.167 \times 10^{-5}
+    \end{equation}
+    En consecuencia, este umbral impone un nivel de confianza del $1 - p \approx 99.997$\,\%. Matemáticamente se garantiza que solo los eventos electromagnéticos deterministas y de alta concentración espectral superen la criba estadística, bloqueando de raíz falsos positivos originados por la varianza térmica.
+
+    \item Filtro de ancho de banda espectral ($n_{\text{act}} < 25$\,\%): el número de \textit{bins} de frecuencia que superan el fondo de ruido en el instante del salto FHSS ($m^*$) debe ser inferior a la cuarta parte del espectro disponible. La fundamentación teórica de este filtro reside en el Teorema de Nyquist y la ocupación en banda base. Para una frecuencia de muestreo $F_s = 14$\,MHz y $N_w = 2048$, la resolución temporal-frecuencial es $\Delta f \approx 6.84$\,kHz/\textit{bin}. Los protocolos FHSS de radiocontrol emplean modulaciones de banda estrecha (típicamente GFSK con anchos de banda entre 1\,MHz y 2\,MHz). Matemáticamente, un salto FHSS de 2\,MHz excitará un máximo de $\lceil 2\text{ MHz} / 6.84\text{ kHz} \rceil \approx 292 \text{ \textit{bins}}$, lo que representa menos del 15\,\% del tensor frecuencial.
+
+    Por el contrario, los protocolos de banda ancha concurrentes en la banda ISM, específicamente WiFi, emplean canales de banda ancha. Dado que su ancho de banda es superior a la frecuencia de muestreo del receptor ($14$\,MHz), la señal OFDM capturada excita de forma prácticamente uniforme los 2048 \textit{bins}, esto es, una ocupación cercana al 100\,\%. Establecer el límite en 512 \textit{bins} ($25$\,\%) sitúa la frontera de decisión en el gran espacio vacío que existe entre la naturaleza espectral de banda estrecha (FHSS) y la de banda ancha (OFDM), garantizando un rechazo topológico muy efectivo de la interferencia WiFi \cite{miller_service_2007}. La medición en la ventana de $\pm 1$\,ms evita que emisiones WiFi adyacentes contaminen \textit{bursts} válidos que se encuentren en las mismas frecuencias.
+\end{itemize}
+
+\begin{table}[htbp]
+\caption{Firma espectral característica de los emisores coexistentes en la banda \gls{ism} de 2.4\,GHz, para $N_w = 2048$ y $\beta = 4.0$.}
+\label{tab:bins_activos_protocolo}
+\vspace{0.1cm}
+\centering
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lccc}
+\hline
+\textbf{Protocolo} & \textbf{\textit{Bins} activos típicos} & \textbf{Fracción del canal} & \textbf{Decisión} \\
+\hline
+(\acrshort{awgn}) & $\approx 128$ & $6.25$\,\% & — \\
+\acrshort{fhss} drones & $\approx 186$ & $\approx 9$\,\% & \textbf{Aceptado} \\
+Bluetooth EDR & $\approx 50$ & $\approx 2.5$\,\% & Mayoritariamente rechazado por $|z_{\text{peak}}|$ \\
+WiFi IEEE~802.11 (OFDM) & $400$--$2048$ & $> 20$\,\% & \textbf{Rechazado} \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+\subsection{Características estadísticas extraídas}
+\label{subsec:features_fisicas}
+
+Las salidas del detector no se emplean únicamente como mecanismo de segmentación temporal; también actúan como un extractor de características estadísticas puras. A partir del análisis del espectro blanqueado y del umbral adaptativo, el algoritmo destila un diccionario exhaustivo de variables físicas que codifican tanto la morfología de las ráfagas individuales como el contexto del espectro completo.
+
+Dependiendo de la arquitectura de la red neuronal que se evalúe (cuyos detalles se exploran en las próximas secciones), los modelos seleccionarán subconjuntos específicos de este diccionario para formar sus vectores de entrada al clasificador. Las características extraídas se dividen en dos familias principales:
+
+Métricas Locales (Nivel de Ráfaga):
+Caracterizan la morfología individual de cada segmento o \textit{burst} detectado en el dominio del tiempo-frecuencia.
+\begin{itemize}\itemsep 0em
+    \item Duración temporal (\texttt{dur\_ms}): Longitud del candidato en milisegundos ($T_b = t_1 - t_0$).
+    \item \textit{Z-score} del pico (\texttt{z\_peak} local): Nivel de significancia estadística alcanzado por el mínimo de entropía dentro de la ráfaga frente al suelo de ruido local.
+    \item Caída de entropía (\texttt{drop\_b}): Magnitud absoluta de la depresión de entropía $\Delta H_b$ respecto al umbral \gls{cfar}.
+    \item Bins activos (\texttt{n\_act\_burst}): Número máximo o mediano de intervalos espectrales activados simultáneamente durante el salto de frecuencia.
+    \item Ancho de banda normalizado (\texttt{n\_bins\_norm}): Cociente entre el número de \textit{bins} activos y el tamaño de la transformada (2048), actuando como estimador directo de la anchura de banda base.
+\end{itemize}
+
+Métricas Globales (Nivel de canal a 75\,ms):
+Proporcionan un vector de contexto que codifica el grado de saturación espectral, la varianza del canal y la relación señal a ruido (\gls{snr}) media a lo largo del intervalo de captura completo.
+\begin{itemize}\itemsep 0em
+    \item Suelo de ruido global (\texttt{global\_nf}): Mediana temporal del estimador $\widehat{H}_{90}(m)$. Actúa como \textit{proxy} analítico inverso de la \gls{snr} del receptor.
+    \item Dispersión de ruido global (\texttt{global\_ns}): Varianza del suelo de ruido estimado a través de la métrica robusta \gls{mad} escalada.
+    \item Entropía media (\texttt{global\_H\_mean}): Valor promedio de $H_s(m)$ en toda la captura, indicando el nivel de saturación espectral general por ruido térmico o interferencias continuas.
+    \item Percentil 75 de actividad espectral (\texttt{global\_p75\_act}): Cuantifica la tendencia central superior de la actividad del espectro para caracterizar transmisiones de banda ancha sostenidas.
+    \item \textit{Z-score} del pico global (\texttt{z\_peak} global): El máximo $|z_{\text{peak}}|$ encontrado en todo el archivo. Funciona como bandera general de detección determinista; si es $0.0$, certifica que el canal carece de energía determinista detectable sobre el ruido.
+\end{itemize}
+
+Todas estas variables se normalizan antes de ser inyectadas en las capas densas finales de las redes neuronales, garantizando la estabilidad de los gradientes durante la fase de entrenamiento.
+
+\subsection{Naturaleza determinística del detector y ventajas de generalización}
+\label{subsec:detector_deterministico}
+
+Un aspecto conceptualmente relevante es que el detector de entropía espectral es completamente agnóstico al conjunto de datos de entrenamiento: no contiene parámetros ajustados mediante gradiente y sus constantes de operación se derivan analíticamente de la distribución estadística del ruido gaussiano y de la geometría espectral de los protocolos \gls{fhss}. Esto confiere al sistema tres ventajas estructurales frente a los detectores basados en aprendizaje profundo \textit{end-to-end}:
+
+\begin{enumerate}\itemsep 0em
+    \item Generalización fuera de distribución: el detector puede aplicarse a señales de modelos de dron no presentes en el conjunto de entrenamiento sin necesidad de re-entrenamiento ni calibración adicional obligatoria.
+    \item Interpretabilidad: cada decisión del detector tiene una justificación física directa y cuantificable en términos de entropía de Shannon, \textit{bins} espectrales activos y \textit{z-score} estadístico \cite{fu_radio_2024}.
+    \item Adaptación automática al canal: la estimación del suelo de ruido y de la dispersión se realiza sobre el propio archivo de 75\,ms en tiempo de inferencia, sin requerir calibración externa ni modelos previos del canal de propagación.
+\end{enumerate}
+
+No obstante, el detector presenta una limitación intrínseca en escenarios de \gls{snr} extremadamente baja: el enmascaramiento del salto \gls{fhss} por el ruido térmico impide que la entropía blanqueada registre un mínimo detectable, y el detector devuelve una lista vacía de candidatos. Esta condición está contemplada explícitamente en la arquitectura del clasificador, que opera correctamente ante la ausencia de detecciones gracias al mecanismo de re-escalado del \textit{z-score} descrito en las secciones posteriores.
+
+\section{Evolución de los Modelos de Clasificación}
+\label{sec:evolucion_modelos}
+
+Una vez definido el bloque de preprocesamiento analítico, el diseño del sistema de detección de drones se aborda como un proceso iterativo de refinamiento arquitectónico. La detección de señales de radiofrecuencia en el límite del ruido térmico y bajo fuerte interferencia cocanal plantea desafíos que escapan a las topologías de aprendizaje automático convencionales. Por ello, a lo largo de esta investigación se ha desarrollado una secuencia evolutiva de modelos basados en Redes Neuronales Convolucionales de Valores Complejos (\gls{cv-cnn}) \cite{bassey_survey_2021}, cuyas características se han detallado en la Sección \ref{sec:cvcnn}. 
+
+Este apartado documenta el progreso cronológico y conceptual de dichas arquitecturas: desde la primera aproximación de segmentación estricta de un solo flujo (SingleStream-CVCNN), pasando por la transición hacia esquemas de doble flujo que fusionan la integridad fasorial de la banda base con la densidad espectral de potencia (\gls{psd}) (DualStream-Attention y sus variantes DualStream-Bandwidth y DualStream-GaussianMixedModel), hasta la exploración empírica de topologías con un mayor número de parámetros (DualStream-Deep). Aquellos conceptos de aprendizaje avanzado incorporados progresivamente a la arquitectura, tales como el modelado por mezclas gaussianas (\gls{gmm}), se definirán y desarrollarán en profundidad en las subsecciones correspondientes donde se justifica su uso. El análisis riguroso de cada iteración y sus debilidades frente al ruido de etiquetas justifica las decisiones de diseño adoptadas en el modelo final de producción (DualStream-SlidingWindow) y su variante (DualStream-SlidingWindowDynamic), que se detallarán en las próximas secciones.
+
+\subsection{Arquitectura preliminar: SingleStream-CVCNN}
+\label{subsec:singlestream_cvcnn}
+
+\subsubsection{Concepto y motivación teórica}
+La primera aproximación de clasificación implementada en esta investigación, denominada \textit{SingleStream-CVCNN}, se concibe como un clasificador a nivel de ráfaga que explota la señal compleja en banda base en conjunción con los metadatos morfológicos extraídos del preprocesamiento analítico. La motivación principal de este diseño radica en procesar de forma coherente las componentes en fase y cuadratura de la señal compleja mediante convoluciones de valores complejos. Este enfoque evita la pérdida de información de fase que introduce el cálculo prematuro del módulo antes de las capas convolucionales, preservando la firma rotacional de las modulaciones \gls{fhss} \cite{trabelsi_deep_2018}.
+
+Para guiar el aprendizaje representacional de la red neuronal convolucional de valores complejos, el sistema depende de la segmentación temporal determinista realizada por el detector de entropía espectral. Cada segmento candidato se procesa de forma independiente. Este enfoque de un solo flujo convolucional se complementa con un vector de metadatos compuesto por características locales de la ráfaga (duración, caída de entropía, significancia estadística local) y variables globales del canal, proporcionando el contexto morfológico necesario para mitigar el impacto de las interferencias transitorias presentes en el entorno.
+
+\subsubsection{Arquitectura e implementación}
+La arquitectura consta de dos ramas de procesamiento independientes que se fusionan en las capas densas finales, tal como ilustra la Figura \ref{fig:singlestream_architecture}. 
+
+\begin{sidewaysfigure}[p]
+    \centering
+    \makebox[\linewidth][r]{\includegraphics[width=1.2\linewidth]{figuras/capitulo4/Modelo1-singlestream.pdf}}
+    \caption{Diagrama de bloques y flujo de tensores del modelo de un solo flujo \textit{SingleStream-CVCNN}.}
+    \label{fig:singlestream_architecture}
+\end{sidewaysfigure}
+
+A continuación se detallan los componentes y tensores de cada rama:
+
+\begin{enumerate}
+    \item Rama de Banda Base Compleja:
+    toma como entrada un tensor correspondiente a las componentes en fase y cuadratura de la ráfaga detectada, tratado algebraicamente como un vector complejo $x \in \mathbb{C}^{1 \times L}$, donde $L = 131.072$ representa la longitud estándar (equivalente a $9.4$\,ms a una frecuencia de muestreo de $14$\,MHz). Esta rama se compone de cuatro bloques convolucionales complejos secuenciales:
+    \begin{itemize}
+        \item ComplexConv1d\_1: $32$ canales de salida complejos, kernel $k=11$, \textit{stride} $s=2$, \textit{padding} $p=5$. Reduce la dimensionalidad temporal a $65.536$ muestras.
+        \item ComplexConv1d\_2: $64$ canales de salida complejos, kernel $k=11$, \textit{stride} $s=2$, \textit{padding} $p=5$. Reduce la dimensionalidad temporal a $32.768$ muestras.
+        \item ComplexConv1d\_3: $128$ canales de salida complejos, kernel $k=11$, \textit{stride} $s=2$, \textit{padding} $p=5$. Reduce la dimensionalidad temporal a $16.384$ muestras.
+        \item ComplexConv1d\_4: $128$ canales de salida complejos, kernel $k=11$, \textit{stride} $s=1$, \textit{padding} $p=5$. Mantiene la dimensión temporal constante.
+    \end{itemize}
+
+    Cada convolución compleja utiliza la formulación del cálculo de Wirtinger para garantizar la holomorfía y la derivabilidad de la función de coste respecto a los pesos complejos durante el proceso de retropropagación \cite{hirose_complex-valued_2012}. Cada bloque convolucional va seguido de una capa de normalización por lotes compleja y la función de activación \gls{crelu}, aplicando la rectificación lineal de forma independiente a las partes real e imaginaria de la señal \cite{trabelsi_deep_2018}.
+    
+    A continuación, las características complejas se proyectan al dominio de los números reales mediante el operador módulo $|z| = \sqrt{\text{Re}(z)^2 + \text{Im}(z)^2 + \epsilon}$, donde el término estabilizador $\epsilon = 10^{-8}$ evita singularidades numéricas en el cálculo del gradiente. Esta proyección colapsa los $256$ mapas de características a $128$ canales reales. Posteriormente, una capa de \textit{adaptive pooling} reduce la dimensión temporal a $32$ intervalos uniformes, generando un tensor de salida de $[128 \times 32]$. Este tensor se aplana a un vector de $4.096$ elementos y alimenta a una capa densa que proyecta la información a un espacio de \textit{embedding} de $256$ características reales, seguido de una capa de \textit{dropout} con una probabilidad del $30~\%$.
+    
+    \item Rama de \textit{Features}:
+    inyecta un vector de $8$ características físicas normalizadas. Este vector codifica tanto la morfología de la ráfaga como la estimación paramétrica del espectro, incluyendo variables locales (duración de la ráfaga, significancia estadística, profundidad de la caída de entropía) y parámetros característicos del canal evaluados sobre la trama completa de 75\,ms.
+\end{enumerate}
+
+Ambas representaciones latentes se concatenan, originando un vector final de dimensión $264$. Este vector alimenta a un \gls{mlp} compuesto por dos capas lineales ocultas de $256$ y $128$ neuronas (ambas con normalización por lotes, activación ReLU y un \textit{dropout} del $40~\%$), culminando en una capa de salida lineal con una única neurona que proporciona la probabilidad en escala \textit{logit} de que la ráfaga corresponda a la transmisión de un dron.
+
+
+
+
+
+\subsubsection{Estrategia de entrenamiento y regularización}
+El entrenamiento de la arquitectura se formaliza bajo un paradigma de clasificación supervisada, estableciendo como objetivo la minimización de la entropía cruzada binaria. La naturaleza asíncrona y variable de las transmisiones \gls{fhss} impone desafíos geométricos y estadísticos que requieren una estrategia de entrenamiento sofisticada, abordada mediante cuatro mecanismos fundamentales:
+\begin{enumerate}
+    \item Estandarización del Tensor Temporal:
+    las ráfagas segmentadas exhiben duraciones físicas dispares dependiendo del protocolo del emisor y las condiciones de propagación. Para acoplar estas señales a la entrada estática de la \gls{cv-cnn}, se aplica un \textit{zero-padding} hasta alcanzar una dimensión fija de 131.072 muestras. Esta magnitud no es arbitraria: a una frecuencia de muestreo de $14$\,MHz, corresponde exactamente a $9.36$\,ms. Este intervalo actúa como una cota superior segura que encapsula holgadamente la ráfaga más larga registrada en el espectro (de aproximadamente $4.4$\,ms, información disponible en la Tabla \ref{tab:distribucion_muestras}), evitando cualquier truncamiento de la información útil al tiempo que mantiene una dimensión en potencia de dos ($2^{17}$) altamente optimizada para el acceso a memoria en \textit{hardware} paralelo. La capa de \textit{adaptive pooling} posterior se encarga de diluir de forma homogénea la presencia de estos ceros.
+
+    \item Muestreo Ponderado frente al Desequilibrio de Clases:
+    el subconjunto de entrenamiento presenta cierto desequilibrio intrínseco de clases provocado por las dispares tasas de repetición de ráfagas de cada fabricante y la prevalencia del ruido de fondo e interferencias en todas las clases. Para evitar que el gradiente descienda hacia un mínimo local trivial (donde la red simplemente aprenda a predecir la clase mayoritaria en todo momento), se reemplaza el muestreo uniforme por una estrategia de muestreo aleatorio ponderado. En la conformación de los lotes de entrenamiento, la probabilidad de seleccionar una muestra $i$ perteneciente a una clase $C$ se define inversamente proporcional a la frecuencia absoluta de dicha clase en ese lote de datos en particular:
+    \begin{equation}
+        p_i \propto \frac{1}{N_C}
+    \end{equation}
+    donde $N_C$ es el número total de ráfagas segmentadas y etiquetadas como clase $C$ disponibles exclusivamente para el entrenamiento. Este mecanismo garantiza que la red neuronal observe estadísticamente una proporción equitativa de ejemplos de ruido y de drones a lo largo de cada época, forzando un aprendizaje no sesgado de la frontera de decisión.
+
+    \item Optimización Desacoplada (AdamW) y Regularización L2:
+    la actualización de pesos se rige por el algoritmo \textit{AdamW} \cite{loshchilov_decoupled_2019} con una tasa de aprendizaje base $\eta = 10^{-4}$. A diferencia del optimizador Adam clásico, que aplica la regularización L2 sumando la penalización directamente al gradiente de la función de coste (lo que interfiere destructivamente con la adaptación de momentos propia del algoritmo Adam), \textit{AdamW} desacopla analíticamente el decaimiento de pesos. La regla de actualización paramétrica para un peso $\theta$ en la iteración de entrenamiento $t$ se formula como:
+    \begin{equation}
+        \theta_{t} = \theta_{t-1} - \eta \left( \alpha \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} + \lambda \theta_{t-1} \right)
+    \end{equation}
+    donde $\hat{m}_t$ y $\hat{v}_t$ denotan, respectivamente, las estimaciones corregidas por sesgo del primer momento (media móvil exponencial de los gradientes) y del segundo momento no centrado (media móvil exponencial de los gradientes al cuadrado); $\epsilon$ es un valor escalar reducido que garantiza la estabilidad numérica previniendo la división por cero; $\alpha$ modula el tamaño del paso adaptativo; y $\lambda$ representa el factor de decaimiento de pesos, fijado en $10^{-3}$. Esta contracción constante y explícita de la magnitud de los parámetros restringe la capacidad de la red para memorizar realizaciones aleatorias y específicas del ruido térmico presentes en el conjunto de entrenamiento. Al impedir que la red utilice capacidad paramétrica en ajustarse al ruido de fondo, se fuerza la convergencia hacia filtros generalizables, mitigando drásticamente el sobreajuste.
+
+    \item \textit{Data augmentation}:
+    Durante la fase de entrenamiento, y de forma exclusiva sobre el subconjunto de entrenamiento, se aplica un esquema de aumentación estocástica continua para inducir dos invarianzas físicas fundamentales en la red neuronal:
+    \begin{itemize}
+        \item Invarianza rotacional: La fase absoluta con la que una onda electromagnética incide en la antena receptora es un valor determinista pero impredecible, ya que depende de la distancia sub-milimétrica exacta y variante entre el dron en movimiento y el receptor. Para forzar a que la CV-CNN no aprenda a depender de una fase particular, cada tensor temporal complejo de entrada se multiplica por un fasor unitario con un ángulo extraído de una distribución uniforme continua:
+        \begin{equation}
+            \tilde{x} = x \cdot e^{j\Delta\phi}, \quad \Delta\phi \sim \mathcal{U}(0, 2\pi)
+        \end{equation}
+        \item Inyección de \gls{awgn}: Se inyecta ruido gaussiano blanco complejo adicional a la señal temporal ($\tilde{x} = \tilde{x} + \mathcal{CN}(0, \sigma_{\text{aug}}^2)$) con $\sigma_{\text{aug}} = 0.02$. En consistencia con el modelo térmico del receptor expuesto en el marco teórico, este ruido simulado es un proceso gaussiano complejo propio, o de simetría circular (\gls{cscg}). Esto garantiza que sus componentes en fase y cuadratura sean estadísticamente independientes, de media nula y compartan idéntica varianza ($\sigma_{\text{aug}}^2/2$). Esta degradación artificial de la \gls{snr} actúa como un difuminado estocástico del límite de decisión en el espacio de entrada de altas dimensiones, endureciendo y ensanchando la frontera probabilística que separa las emisiones de los drones de las interferencias.
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{Limitaciones estructurales}
+A pesar de la capacidad de representación de los filtros convolucionales complejos, el análisis estructural de esta arquitectura revela una limitación debida a su acoplamiento determinista con el bloque de preprocesamiento analítico. En escenarios de ruido extremo, la densidad espectral del fondo enmascara la disminución de entropía generada por las transmisiones \gls{fhss}. El detector sufre un truncamiento temporal: en lugar de segmentar el pulso de dron completo, el umbral adaptativo únicamente captura los instantes de mayor concentración energética, produciendo intervalos capturados de duración insignificante.
+
+Este fenómeno de truncamiento induce dos fallos de funcionamiento críticos en la red neuronal:
+\begin{enumerate}
+    \item Inconsistencia morfológica: al recibir un pulso extremadamente breve y desprovisto de la estructura de modulación coherente característica del \gls{fhss}, el clasificador convolucional carece de información de fase suficiente para realizar la inferencia, degenerando la predicción hacia la clase mayoritaria (ruido).
+    \item Colapso en la rama de metadatos: la variable correspondiente a la duración temporal, inyectada directamente en la capa densa, colapsa hacia valores mínimos. La red neuronal aprende un sesgo estadístico que asocia duraciones minúsculas con transitorios de ruido, forzando un rechazo automático de la muestra.
+\end{enumerate}
+
+Dado que la arquitectura analiza la ráfaga de forma aislada, carece del contexto frecuencial continuo de toda la captura que le permitiría discernir la ocupación real del canal independientemente de los errores de segmentación temporal. Esta debilidad estructural evidencia la necesidad de transicionar hacia arquitecturas de doble flujo que fusionen la coherencia de fase de la banda base con la estimación integral de la densidad espectral de potencia a lo largo de toda la trama temporal.
+
+\subsection{Transición al Dominio Dual: DualStream-Attention y Variantes}
+\label{subsec:dualstream_attn}
+
+\subsubsection{Fusión de representaciones temporales y espectrales (DualStream-Attention)}
+La vulnerabilidad estructural del modelo base con un único flujo de datos, detallado en la Sección \ref{subsec:singlestream_cvcnn}, frente a los problemas de la inconsistencia morfológica y el colapso en la rama de datos estadísticos exige plantear una nueva arquitectura para el clasificador. La red debe adquirir más información del contexto electromagnético global, para poder funcionar correctamente incluso cuando la información que ofrece la señal IQ de los transitorios \gls{fhss} queda completamente eclipsada por el ruido de fondo o las interferencias. Nace así el paradigma del doble flujo de datos, cuyo diseño bimodal se expone de forma íntegra en la Figura \ref{fig:dualstream_attention_architecture}. Esta nueva arquitectura propuesta no se limita a aislar la serie temporal compleja, sino que se le inyecta de manera simultánea una estimación de la densidad espectral de potencia. 
+
+\begin{sidewaysfigure}[p]
+    \centering
+    \makebox[\linewidth][r]{\includegraphics[width=1.2\linewidth]{figuras/capitulo4/Modelo2-DualStream-Attention.pdf}}
+    \caption{Diagrama de bloques del modelo \textit{DualStream-Attention}, ilustrando el procesamiento en paralelo de la rama temporal y la rama frecuencial (Welch).}
+    \label{fig:dualstream_attention_architecture}
+\end{sidewaysfigure}
+
+El modelo \textit{DualStream} complementa la rama convolucional 1D principal (que procesa la señal IQ del transitorio segmentado por el detector) con una segunda rama convolucional que opera en paralelo. Esta nueva rama procesa un vector unidimensional con la \gls{psd} estimada sobre la ventana de observación completa de $75$\,ms mediante el método de Welch. Esta técnica de estimación espectral mitiga la alta varianza estadística inherente al periodograma estándar dividiendo la señal temporal en bloques superpuestos. A cada segmento se le aplica una función de ventana (de forma análoga a la \gls{stft} descrita en el Capítulo \ref{cap:MarcoTeorico}), se computa su transformada discreta y, finalmente, se promedian las densidades espectrales resultantes. Esta estabilización de la varianza se obtiene a expensas de una disminución proporcional en la resolución frecuencial.
+
+En esta etapa de preprocesamiento, la arquitectura no alimenta la rama frecuencial con la potencia en escala lineal. Las señales de radiofrecuencia abarcan un rango dinámico extremadamente amplio, por lo que la introducción directa de magnitudes lineales induciría inestabilidades numéricas severas en los gradientes durante el entrenamiento. Para solventar este problema, la \gls{psd} obtenida se transforma a una escala logarítmica previamente a su inserción en la red, comprimiendo el rango dinámico y garantizando una convergencia estable de los parámetros.
+
+Analizando el comportamiento matemático de este nuevo modelo, la rama temporal extrae un vector latente $h_{\text{IQ}} \in \mathbb{R}^{128}$ a partir del tensor de banda base original de $131.072$ muestras. Emplea para ello exactamente los mismos cuatro bloques de convolución compleja definidos en el modelo anterior. En paralelo, la nueva rama espectral evalúa el vector de la \gls{psd} mediante un bloque convolucional convencional compuesto por filtros unidimensionales, reducción de dimensionalidad por \textit{max-pooling} y una proyección lineal, generando una segunda representación latente $h_{\text{PSD}} \in \mathbb{R}^{128}$.
+
+Para lograr esta compresión topológica y extraer los patrones energéticos que logran prevalecer sobre el ruido del canal, la rama frecuencial procesa el vector \gls{psd} (compuesto por $2048$ \textit{bins} discretos) a través de una secuencia jerárquica de tres etapas:
+\begin{itemize}
+    \item Conv1D\_PSD\_1: esta primera capa aplica un \textit{kernel} de convolución amplio (en comparación con los que se usan en modelos orientados a visión artificial, que empiezan siendo mucho más reducidos) con $k=15$. Seguidamente, se aplica un \textit{stride} $s=2$ y un \textit{padding} $p=7$, proyectando la entrada hacia 32 mapas de características espaciales. Al aplicar filtros de este tamaño en esta etapa inicial, se asegura un suavizado del ruido subyacente. A continuación, el tensor atraviesa una normalización por lotes, pasa por una capa de activación ReLU y un \textit{max-pooling} con $k=2$, forzando una caída drástica de la dimensionalidad frecuencial desde los 2048 \textit{bins} originales hasta 512 escalares por canal.
+    
+    \item Conv1D\_PSD\_2: la segunda etapa incrementa la profundidad de la representación a 64 canales de salida, utilizando un \textit{kernel} más focalizado con un tamaño $k=7$, $\textit{stride}=2$ y $\textit{padding}=3$. Tras aplicar de nuevo \textit{Batch Normalization} y ReLU, un segundo filtro de \textit{max-pooling} comprime el tensor a la mitad, reduciendo la dimensión a 128 \textit{bins}.
+    
+    \item Conv1D\_PSD\_3: finalmente, se extraen 128 canales de salida empleando un \textit{kernel} con $k=3$, \textit{stride} $s=1$ y \textit{padding} $p=1$. Como particularidad de esta arquitectura, en esta última etapa se prescinde del \textit{max-pooling}. En su lugar, se introduce una capa de \textit{Adaptive Average Pooling} global que promedia por completo el eje espacial, obligando a que cada canal colapse en un único escalar que sintetiza la presencia de la característica buscada en las transmisiones de drones a lo largo de todo el espectro. El resultado directo de esta proyección es el vector latente $h_{\text{PSD}} \in \mathbb{R}^{128}$.
+\end{itemize}
+
+La arquitectura dispone en este estado del procesamiento de dos representaciones latentes de 128 dimensiones, una extraída del dominio temporal y otra del frecuencial. El hecho de que ambos flujos terminen procesados como vectores del mismo tamaño es un requisito matemático indispensable para la posterior fusión ponderada de los datos.
+Para la integración de ambos tensores, se descartó la concatenación ingenua y se implementó una capa de fusión dinámica basada en el mecanismo de atención, denominada \textit{Attention Fusion} (véase la Figura \ref{fig:attention_fusion}). Este diseño estructural no es fortuito, sino que responde directamente a la diversidad de atenuación que imponen el canal de comunicaciones y las interferencias coexistentes sobre las distintas representaciones de la señal. 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\linewidth]{figuras/capitulo4/AttentionFusion.pdf}
+    \caption{Esquema interno del bloque \textit{Attention Fusion}, donde la red infiere los pesos relativos de importancia de cada dominio espectral y temporal a partir de la representación conjunta.}
+    \label{fig:attention_fusion}
+\end{figure}
+
+El concepto de ponderar dinámicamente los mapas de características mediante mecanismos de atención tiene su origen en el campo de la visión artificial. Arquitecturas pioneras como el \textit{Convolutional Block Attention Module} (CBAM) \cite{woo_cbam_2018} demostraron que una red puede aprender a enfatizar autónomamente características espaciales y de canal significativas, suprimiendo simultáneamente aquellas activaciones irrelevantes. Recientemente, este paradigma atencional ha sido extrapolado con notable éxito a la clasificación de señales de radiofrecuencia. Un claro exponente en el estado del arte es la red RF-AttenNet \cite{Podder_rf-AttenNet}, que incorpora mecanismos híbridos de atención para discernir patrones de señales mixtas en tareas de detección de enjambres de \gls{uav}s, probando empíricamente que la atención guiada mejora drásticamente la robustez frente al ruido térmico y las interferencias del canal.
+
+Basándose en estos cimientos teóricos, el bloque \textit{Attention Fusion} propuesto en esta investigación traslada el mecanismo de atención al contexto de la fusión multimodal (tiempo y frecuencia). En escenarios con un nivel de ruido electromagnético severo (muy baja \gls{snr}), la señal de los \gls{uav}s sufre alteraciones asimétricas en sus representaciones temporal y espectral \cite{gluge_robust_2024, lacy_machine_2024}. Por un lado, ante la presencia de interferencias de banda estrecha de alta potencia, la densidad espectral de potencia queda enmascarada localmente y resulta inútil, pero el vector fasorial I/Q en el dominio del tiempo logra preservar la integridad de la fase rotacional característica de la modulación. En contraposición, los desvanecimientos profundos del canal truncan por completo la envolvente temporal del pulso impidiendo la detección coherente de fase, pero la integración acumulada en la \gls{psd} permite recuperar la firma energética originada por los saltos de frecuencia.
+
+Una concatenación paramétrica convencional asigna invariablemente la misma importancia estadística y los mismos pesos a ambos flujos de información. Para superar esta limitación, el bloque de atención actúa como una estructura reguladora que pondera la fiabilidad matemática de cada tensor en la ventana de observación activa. El sistema opera recibiendo los tensores $h_{\text{IQ}} \in \mathbb{R}^{D}$ y $h_{\text{PSD}} \in \mathbb{R}^{D}$, donde la dimensión establecida es $D=128$. Ambos se acoplan a lo largo del canal espacial formando el tensor $x \in \mathbb{R}^{2D}$:
+
+\begin{equation}
+    x = \left[ h_{\text{IQ}} \parallel h_{\text{PSD}} \right]
+\end{equation}
+
+El tensor $x \in \mathbb{R}^{256}$ se introduce en una red neuronal diseñada específicamente para inferir la atención. El tensor atraviesa una capa densa que reduce la dimensionalidad a $D=128$. El vector resultante pasa por una capa de \textit{Batch Normalization} y una función de activación ReLU, seguida de una capa de \textit{Dropout} con probabilidad de desconexión del $0.2$. Una segunda transformación proyecta este vector intermedio hacia un subespacio de $64$ dimensiones, seguida de otra capa de activación ReLU. Una tercera capa densa mapea estas $64$ características a un vector de salida $z \in \mathbb{R}^{2}$, que contiene las puntuaciones numéricas brutas que evalúan la fiabilidad asignada a cada rama de entrada.
+Los coeficientes escalares definitivos se computan aplicando la función matemática \textit{Softmax} sobre el vector $z$:
+\begin{equation}
+    \begin{pmatrix} \alpha_{\text{IQ}} \\ \alpha_{\text{\gls{psd}}} \end{pmatrix} = \text{Softmax}(z) = \frac{1}{\sum_{i \in \{\text{IQ}, \text{\gls{psd}}\}} e^{z_i}} \begin{pmatrix} e^{z_{\text{IQ}}} \\ e^{z_{\text{\gls{psd}}}} \end{pmatrix}
+\end{equation}
+Esta operación restringe ambos parámetros escalares al intervalo continuo $[0, 1]$ asegurando que su suma sea exactamente la unidad (es decir, la importancia de la rama temporal será la opuesta de la rama \gls{psd} o viceversa). La fusión multimodal final se resuelve mediante una suma convexa, donde cada tensor base es escalado por su factor paramétrico correspondiente:
+\begin{equation}
+    h_{\text{fused}} = \alpha_{\text{IQ}} \cdot h_{\text{IQ}} + \alpha_{\text{PSD}} \cdot h_{\text{PSD}}
+\end{equation}
+El tensor resultante $h_{\text{fused}} \in \mathbb{R}^{128}$ contiene la integración de ambas representaciones. Para comprender cómo la red neuronal determina esta importancia simplemente a partir del tensor con las salidas de ambas ramas concatenadas, es necesario analizar el aprendizaje de representaciones conjuntas \cite{baltrusaitis_multimodal_2018, woo_cbam_2018}. El vector $x$ almacena la superposición topológica de la señal electromagnética detectada en su dominio temporal y frecuencial. Si en una captura específica la rama I/Q se encuentra severamente distorsionada pero la rama \gls{psd} retiene la firma energética, una asignación simétrica de pesos degradaría el clasificador final. Durante la fase de entrenamiento, la propagación hacia atrás (\textit{backpropagation}) del error desde la función de pérdida actúa directamente sobre los parámetros de esta red neuronal usada como bloque de atención. El optimizador penaliza la proyección que otorga relevancia a la rama que no aporta información, forzando a la red a mapear el patrón de interferencia detectado en $x$ hacia una asimetría escalar en los pesos de salida. Esto hace que el sistema implemente una estrategia de inferencia condicionada por los datos, decidiendo de forma dinámica qué dominio posee mayor información efectiva.
+
+\subsubsection{Inyección del ancho de banda y mitigación de ruido de etiquetas (Variantes Bandwidth y GMM)}
+Tras consolidar la arquitectura de fusión bimodal del modelo \textit{DualStream}, el análisis empírico posterior de las inferencias erróneas reveló dos caminos principales a mejorar. El primero abordaba una limitación de carácter estructural, ya que si bien la estimación del suelo de ruido y la entropía proporcionaban información contextual valiosa, el modelo carecía de un parámetro de medición directa sobre el ancho de banda de la ráfaga detectada. Los transitorios \gls{fhss} emitidos por los drones ocupan una porción muy específica del espectro electromagnético. Para explotar esta firma espectral, la variante \textit{DualStream-Bandwidth} inyecta el ancho de banda normalizado del \textit{burst} como una cuarta métrica en el bloque decisor final, dotando al clasificador de una métrica directa para descartar falsos positivos producidos por ráfagas de ruido excesivamente estrechas en frecuencia.
+
+La segunda iteración de mejora busca solucionar un problema estructural severo y endémico en el entrenamiento de clasificadores, el \textit{label noise}. Como se detalló en el Capítulo \ref{cap:MarcoTeorico}, el proceso de captura automatizado que Glüge \textit{et al}. implementan para la creación del \textit{dataset} utilizado en esta investigación en su artículo \cite{gluge_robust_2024}, introduce de forma inevitable grabaciones catalogadas como ráfagas válidas de dron que, debido a desvanecimientos severos del canal (sobre todo en entornos con muy baja \gls{snr}), contienen únicamente ruido térmico. Forzar al optimizador a ajustar los parámetros de las redes para aprender ruido plano como si fuera una señal útil genera gradientes inestables y debilita la capacidad de generalización del modelo.
+
+Para mitigar este grado de contaminación sin la necesidad inviable de purgar visualmente el conjunto de datos al completo, se propuso el modelo \textit{DualStream-GMM}. Esta variante implementa un enfoque de entrenamiento estadístico robusto inspirado en el algoritmo \textit{DivideMix} \cite{li_dividemix_2020}, el cual se fundamenta en la observación empírica de que las redes neuronales tienden a asimilar los patrones limpios o muy evidentes del conjunto de datos en las primeras épocas de entrenamiento, reflejando valores de función de coste muy reducidos. Cuando la red lleva algunas épocas de entrenamiento, aprendiendo correctamente estos patrones en los datos gracias a sus etiquetas correctas, al introducir una entrada con \textit{label noise} (es decir, un \textit{burst} de interferencia o ruido de canal puro catalogado como clase dron), este error se dispara y toma un valor completamente anormal.
+
+% Partiendo de esta premisa de disparidad de gradientes, el \textit{DualStream-GMM} ajusta un Modelo de Mezcla Gaussiana (\gls{gmm}) de dos componentes sobre la distribución continua de las pérdidas del \textit{batch} de entrenamiento. Este modelo matemático actúa como un clasificador no supervisado que separa dinámicamente los datos en un subconjunto limpio (sin \textit{label noise}) y un subconjunto degradado (con presencia de etiquetas erróneas) en el transcurso de cada época \cite{najar_comparison_2017}. Este mecanismo de filtrado en tiempo de ejecución permite a la red extraer las características de las muestras fiables mientras aplica técnicas de regularización sobre las ráfagas corrompidas, mitigando en cierta parte el impacto del \textit{label noise}.
+
+Partiendo de esta premisa de disparidad de gradientes, el \textit{DualStream-GMM} formaliza este comportamiento ajustando un Modelo de Mezcla Gaussiana (\gls{gmm}) bidimensional sobre la distribución de pérdidas individuales durante la fase de optimización. Sea $\ell_i = \mathcal{L}(f_\theta(x_i), y_i)$ el valor de la función de coste para la $i$-ésima muestra de un \textit{batch} de entrenamiento, el modelo \gls{gmm} aproxima la función de densidad de probabilidad empírica de estas pérdidas como una combinación lineal de dos componentes gaussianas:
+
+\begin{equation}
+    p(\ell) = \sum_{k=0}^{1} \pi_k \mathcal{N}(\ell \mid \mu_k, \sigma_k^2)
+\end{equation}
+
+Donde $\pi_k$, $\mu_k$ y $\sigma_k^2$ representan, respectivamente, el coeficiente de mezcla, la media y la varianza de la componente $k$. El algoritmo Expectation-Maximization descrito en \cite{li_dividemix_2020} ajusta estos parámetros en tiempo de ejecución de tal modo que la componente con menor media modela el subconjunto de datos limpios (muestras donde la predicción de la red concuerda con la etiqueta), mientras que la componente de mayor media encapsula las muestras afectadas por \textit{label noise} \cite{najar_comparison_2017}. 
+Una vez ajustado el modelo sobre las pérdidas del \textit{batch}, la red calcula la probabilidad a posteriori de que una muestra concreta $i$ pertenezca a la distribución de datos limpios ($k=0$):
+
+\begin{equation}
+    w_i = P(k=0 \mid \ell_i) = \frac{\pi_0 \mathcal{N}(\ell_i \mid \mu_0, \sigma_0^2)}{\sum_{j=0}^{1} \pi_j \mathcal{N}(\ell_i \mid \mu_j, \sigma_j^2)}
+\end{equation}
+
+Este coeficiente $w_i \in [0, 1]$ actúa como un escalar dinámico que multiplica de manera directa el valor de la función de coste de cada muestra $i$ de forma previa a la etapa de retropropagación. Con esta ponderación matemática, el gradiente resultante atenúa progresivamente el impacto paramétrico de aquellas ráfagas cuya pérdida inicial resulta anormalmente alta ($w_i \to 0$). Esta estrategia de integración constituye un mecanismo algorítmico intrínseco para suprimir la influencia de las muestras corrompidas por ruido de etiquetas (\textit{label noise}) durante la optimización del modelo.
+
+\subsubsection{Análisis de rendimiento y limitaciones de la Fusión Bimodal}
+La incorporación de la rama frecuencial en la familia de modelos \textit{DualStream} supuso un avance cualitativo frente a la topología original de flujo único. Al integrar la estimación \gls{psd}, el clasificador logró compensar la inconsistencia morfológica de las ráfagas truncadas en escenarios de muy baja \gls{snr}, demostrando una estabilidad y capacidad de discriminación superiores que el modelo \textit{SingleStream}.
+
+A pesar de alcanzar una convergencia adecuada, la evaluación rigurosa del modelo evidenció dos limitaciones estructurales relevantes. La aplicación de modelos estadísticos \gls{gmm} integrados en estrategias de mitigación de \textit{label noise} como \textit{DivideMix} asume que existe una separabilidad en la distribución de las pérdidas durante las primeras épocas de optimización. En el ámbito radio, sin embargo, una transmisión legítima sometida a un nivel de ruido alto con interferencias que se superponen a su firma espectral presenta una pérdida prácticamente indistinguible de la del ruido térmico puro. Esta superposición provoca que el clasificador descarte las señales válidas pero altamente atenuadas, ignorando precisamente los casos límite que se pretendían asimilar para generalizar en entornos de muy baja \gls{snr}.
+
+La inyección de parámetros escalares que aportan información directa sobre la transmisión, como la duración de la ráfaga detectada y su ancho de banda, induce además un sesgo de representación conocido en \gls{ml} como \textit{shortcut learning}. Al proporcionar a la arquitectura una métrica fuertemente correlacionada con la clase objetivo, la red neuronal sesga sus decisiones hacia estas variables, ignorando la información de los tensores de banda base IQ y \gls{psd}. Ráfagas de ruido aleatorio cuya duración o ancho de banda coincida accidentalmente con la firma del dron generan falsos positivos, mientras que transmisiones legítimas truncadas por el canal producen falsos negativos.
+
+Pese a que las métricas globales reflejan un rendimiento razonablemente sólido, estas dos conclusiones evidencian un modelo poco robusto. En un despliegue real de alerta y detección de drones, depender de aproximaciones estadísticas que purgan los eventos más críticos del canal, o integrar variables escalares que ciegan la capacidad de la red para extraer información sobre las transmisiones, constituye un riesgo de diseño que no puede asumirse. Dicho esto, se replanteó la base de clasificación, motivando la transición hacia la exploración de redes paramétricamente más profundas y enfoques de aprendizaje por instancias múltiples que se detallarán en secciones posteriores.
+
+\subsection{Exploración de límites estructurales: DualStream-Deep }
+\label{subsec:dualstream_deep}
+
+Tras comprobar las limitaciones del modelo \textit{DualStream-GMM} mencionadas en el apartado anterior, se replanteó el rediseño de la arquitectura. Dado que el modelo terminaba descartando señales legítimas al confundirlas con el ruido de fondo, la primera conclusión lógica apuntaba a un problema de falta de capacidad de generalización en la red neuronal. Se partía de la premisa de que los bloques convolucionales del clasificador no tenían la suficiente profundidad, y no poseían la potencia paramétrica suficiente para extraer características complejas que le permitieran distinguir el ruido térmico de las transmisiones muy atenuadas.
+
+\subsubsection{Motivación teórica del aumento de parámetros del modelo (DualStream-Deep)}
+Frente a esta hipótesis de falta de capacidad, se optó por la estrategia más directa en el diseño de redes neuronales: aumentar el tamaño del modelo. Se asumió que, si la arquitectura disponía de más capas ocultas y canales de procesamiento, tendría una cantidad de parámetros suficiente para aprender patrones mucho más sutiles en la señal en banda base y separar correctamente las firmas electromagnéticas.
+
+De este modo surge el modelo \textit{DualStream-Deep}, un experimento enfocado puramente en el sobredimensionamiento de la red. Esta variante incrementa tanto la profundidad como la anchura de las ramas convolucionales. Además, para intentar frenar la dependencia excesiva de la red respecto a la duración de la ráfaga (el \textit{shortcut learning} diagnosticado en la versión anterior), se aplicó una atenuación manual sobre las características estadísticas inyectadas al final de la red. El objetivo de este cambio, que se detallará en secciones posteriores, es forzar al algoritmo a optimizar sus pesos basándose principalmente en la información morfológica de los tensores de entrada, restando protagonismo a la rama de datos estadísticos.
+
+\subsubsection{Arquitectura e implementación}
+La topología base de \textit{DualStream-Deep}, ilustrada en la Figura \ref{fig:dualstream_deep_architecture}, es funcionalmente análoga a la del modelo \textit{DualStream} detallado en la sección previa, pero incorpora un sobredimensionamiento drástico en el tamaño y profundidad de sus filtros convolucionales.
+
+\begin{sidewaysfigure}[p]
+    \centering
+    \makebox[\linewidth][r]{\includegraphics[width=1.2\linewidth]{figuras/capitulo4/Modelo3-DualStream-Deep.pdf}}
+    \caption{Diagrama arquitectónico del modelo \textit{DualStream-Deep}, evidenciando la profunda expansión paramétrica de los canales y tamaños de \textit{kernel} en la rama temporal y espectral.}
+    \label{fig:dualstream_deep_architecture}
+\end{sidewaysfigure}
+
+Se tienen dos ramas principales de procesamiento: por un lado, una rama que tiene como entrada la señal IQ de un \textit{burst} que da como salida el detector de entropía; por otro lado, la segunda rama, que se alimenta con la \gls{psd} de la grabación completa de $75$\,ms. La estructura interna de los bloques convolucionales sí ha sufrido modificaciones, que se detallan a continuación:
+
+\begin{itemize}
+    \item Rama Temporal: la red se reestructuró en cuatro etapas secuenciales. 
+    \begin{itemize}
+        \item Conv1D\_IQ\_1: emplea un \textit{kernel} de $k=128$ muestras. A la frecuencia de muestreo del sistema ($F_s = 14$\,MHz), este filtro abarca una ventana temporal de aproximadamente $9.14\,\mu\text{s}$. Teniendo en cuenta que los protocolos de control y telemetría de los \gls{uav} emplean comúnmente tasas de modulación en el rango de 250 a 1000 kilobaudios, un símbolo individual presenta una duración del orden de 1 a $4\,\mu\text{s}$. Este tamaño de filtro garantiza por diseño que el campo receptivo de la primera capa abarque múltiples transiciones de símbolos consecutivos, lo que permite a los núcleos convolucionales complejos extraer la trayectoria de la fase instantánea y las desviaciones de frecuencia características de las modulaciones empleadas en los esquemas \gls{fhss}. La capa aplica un \textit{stride} $s=4$ y un \textit{padding} $p=64$, proyectando la entrada a 64 canales. A esto le sigue una etapa de \textit{Batch Normalization}, capa de activación ReLU y una reducción dimensional mediante \textit{max-pooling} con $k=4$.
+        \item Conv1D\_IQ\_2: se pasa de 64 a 128 canales utilizando un filtro de $k=31$. Dado que la señal de entrada a esta etapa ya ha sufrido una reducción espacial por un factor de 4, este tamaño de \textit{kernel} mantiene un campo receptivo equivalente de aproximadamente $8.86\,\mu\text{s}$ sobre la señal original. Esta extensión temporal en las capas intermedias es necesaria para correlacionar secuencias de símbolos más largas e identificar patrones de preámbulo o sincronización específicos del protocolo que operan a un nivel de abstracción superior al del símbolo individual. Opera con $s=2$ y $p=15$, seguida del mismo bloque de normalización y \textit{max-pooling} por factor de 4.
+        \item Conv1D\_IQ\_3 y Conv1D\_IQ\_4: las dos últimas etapas afinan la representación para enfocar las características de alto nivel. Se emplean \textit{kernels} progresivamente más reducidos ($k=7$ con 256 canales y $k=3$ expandiendo la dimensionalidad final a 512 canales). Una capa \textit{Adaptive Average Pooling} global colapsa el eje temporal, comprimiendo la salida a un vector latente $h_{\text{IQ}} \in \mathbb{R}^{256}$.
+
+    \end{itemize}
+
+    \item Rama Frecuencial: se estructura en tres etapas convolucionales:
+    \begin{itemize}
+        \item Conv1D\_PSD\_1: aplica un \textit{kernel} $k=15$ con \textit{stride} $s=2$, proyectando el espectrograma 1D a 64 canales, reduciendo la dimensionalidad a la mitad mediante \textit{max-pooling} ($k=2$).
+        \item Conv1D\_PSD\_2: amplía a 128 canales con un \textit{kernel} más estrecho ($k=7$) y \textit{stride} $s=2$, repitiendo la etapa de \textit{max-pooling} con $k=2$.
+        \item Conv1D\_PSD\_3: extrae 256 canales mediante un \textit{kernel} $k=3$. Al igual que en la rama temporal, la salida pasa por una capa \textit{Adaptive Average Pooling} y una proyección lineal, generando el vector latente frecuencial $h_{\text{PSD}} \in \mathbb{R}^{256}$.
+    \end{itemize}
+\end{itemize}
+
+Una vez obtenidos los dos vectores representativos de tamaño $256$, la arquitectura hereda el mismo mecanismo dinámico \textit{Attention Fusion} diseñado originalmente para el modelo \textit{DualStream-Attention}, que se explica en la Sección \ref{subsec:dualstream_attn}. El funcionamiento matemático y conceptual de este bloque es idéntico al detallado anteriormente, con la única adaptación requerida para procesar los nuevos tensores: el tensor concatenado de entrada pasa a ser $x \in \mathbb{R}^{512}$, y la primera capa densa del bloque de atención la reduce hacia el nuevo subespacio de tamaño $D=256$. Como en la arquitectura dual base, esta ponderación garantiza que el tensor final $h_{\text{fused}} \in \mathbb{R}^{256}$ priorice la información del dominio (temporal a partir de la señal I/Q o frecuencial a partir de la \gls{psd}) menos degradado.
+
+\subsubsection{Estrategia de Entrenamiento y Limitaciones Estructurales}
+El incremento de la profundidad paramétrica en la arquitectura \textit{DualStream-Deep} exige rediseñar el esquema de optimización y entrenamiento. Procesar la información a nivel de fichero resulta ineficiente para modelos con un número de parámetros tan elevado, por lo que la generación de datos de entrenamiento se ha reestructurado por completo.
+
+Para suprimir el impacto del \textit{label noise}, el conjunto de entrenamiento se filtra conservando exclusivamente las capturas con $\text{SNR} \ge 8$\,dB, asegurando que las señales de entrada tengan las características necesarias para el correcto ajuste de los pesos y se logre una identificación correcta de las transmisiones de drones. Cada ráfaga extraída se centra en un tensor de 131.072 muestras ($9.4$\,ms, este valor no es trivial, se detalla el por qué de esta cifra en las Secciones \ref{subsec:singlestream_cvcnn} y \ref{subsec:dualstream_attn}). Dado que la duración del transitorio \gls{fhss} es inferior a esta ventana de observación, se sustituye el \textit{zero-padding} de modelos anteriores por la inclusión del contexto electromagnético real, es decir, se preserva el ruido de fondo capturado en los instantes inmediatamente previos y posteriores a la transmisión.
+
+Un detalle importante es que eliminar del subconjunto de entrenamiento los datos con degradación producida por el ruido del canal y las interferencias no significa que el modelo sólo se entrene con datos a una alta \gls{snr}. La inclusión de datos con degradaciones severas se aplica de forma dinámica durante la conformación de los \textit{batches}, es decir, se aplica \textit{data augmentation}. A cada tensor en banda base $x[n]$ se le inyecta ruido \gls{awgn} sintético $w[n] \sim \mathcal{CN}(0, \sigma_w^2)$, ajustando la varianza $\sigma_w^2$ para inducir relaciones señal a ruido distribuidas uniformemente entre $[-20, -4]$\,dB. En la fase de inferencia, el modelo se sigue evaluando usando el subconjunto de test creado a partir del conjunto de datos original, con señales que cubren todo el rango de relación señal a ruido conocido (de -20 a 30 dB).
+
+Las métricas obtenidas durante el entrenamiento mostraron una convergencia casi perfecta. Sin embargo, al evaluar el modelo contra el conjunto de datos de test, el rendimiento en bajas \gls{snr} era muy similar al de los modelos anteriormente descritos. El análisis de este comportamiento reveló un problema de \textit{data leakage}. Al extraer varias ráfagas de una misma captura continua, todas comparten el mismo suelo de ruido y patrones similares de interferencias. Debido a su gran número de parámetros, el modelo \textit{DualStream-Deep} aprovecha esta fuga de información y en lugar de extraer las características de los drones, minimiza el error memorizando la densidad espectral del ruido de fondo específica de cada archivo. De nuevo aparece un problema de \textit{Shortcut Learning}, el clasificador fue incapaz de generalizar frente a los perfiles de ruido desconocidos del conjunto de test cuando estos pertenecen al rango de \gls{snr}s críticas.
+
+A partir de este flujo de trabajo se puede sacar la siguiente conclusión: el entrenamiento usando únicamente \textit{data augmentation} (para tratar de suplir el problema del \textit{label noise} con el que cuenta este conjunto de datos) como representaciones de las transmisiones en entornos extremos de muy baja \gls{snr} no es suficiente. No cabe duda de que se trata de una herramienta útil, y como se verá más adelante, indispensable en el modelo definitivo que se propone en esta investigación, pero debe estar acompañada de otros mecanismos que aporten al modelo la información que necesita para poder detectar las transmisiones en estos entornos electromagnéticos tan hostiles. 
+
+
+\section{Modelos de Producción Finales: DualStream-SlidingWindow y Variante Dinámica}
+\label{sec:dualstream_def}
+La etapa de entrada de este modelo hereda el filtrado introducido en la variante \textit{DualStream-Deep}. La rama temporal mantiene un \textit{kernel} convolucional de 128 muestras para procesar la señal en escenarios de muy baja \gls{snr}. La integración de este número de muestras consecutivas ($9.14\,\mu$s a $14$\,MHz) implementa un filtro que reduce la varianza del ruido del canal antes de la extracción de características. Este enfoque difiere de los filtros de menor tamaño ($k=3$ o $k=5$) utilizados en la literatura \cite{gluge_robust_2024}, ya que estos están preparados para visión artificial. Tras esta primera capa, la arquitectura aplica \textit{kernels} de $k=31$, $k=7$ y $k=3$ para modelar la morfología del pulso \gls{fhss}.
+
+La primera modificación radica en una reestructuración interna de la arquitectura de la red, que afecta también a su estrategia de entrenamiento. El objetivo es dotar a la red neuronal de una arquitectura que, minimizando la dependencia con el detector basado en entropía, sea capaz de filtrar los \textit{bursts} de entrada promediando el ruido que se incluye en ellos con el objetivo de reducirlo y aplanarlo al máximo.
+
+La segunda modificación altera la forma en la que se ejecuta la inferencia. En lugar de evaluar los transitorios detectados de forma aislada, el clasificador adopta un paradigma de evaluación continua del canal de comunicación mediante ventanas. Este enfoque divide el flujo de datos del canal en ventanas temporales deslizantes y solapadas; un método que reproduce la operativa de integración continua con la que los sistemas de detección de \gls{uav}s escanean el espectro radioeléctrico en tiempo real para la alerta temprana \cite{ezuma_detection_2020, gluge_robust_2024}. 
+
+Los siguientes apartados detallan la fundamentación y la implementación de estas dos decisiones metodológicas que dan lugar a la familia de modelos \textit{DualStream-SlidingWindow}.
+
+\subsubsection{Arquitectura interna de los modelos \textit{DualStream-SlidingWindow}}
+La evolución final de la arquitectura, que implementa el barrido de ventana continua sobre el espectro en lugar de extraer transitorios aislados, se materializa en los modelos representados visualmente en las Figuras \ref{fig:slidingwindow_architecture} y \ref{fig:dynamic_slidingwindow_architecture}. El diseño de la etapa de entrada de este modelo abandona los filtros de tamaño reducido para incorporar un filtrado en las primeras capas capaz de mitigar el ruido de fondo de forma efectiva. Para procesar la señal de radiofrecuencia sin que la red colapse, la rama temporal sustituye los \textit{kernels} convolucionales pequeños ($k=3$ o $k=5$), que emplea el modelo de referencia creado por Glüge \textit{et al.} en \cite{gluge_robust_2024}, por un \textit{kernel} de integración de 128 muestras.
+
+\begin{sidewaysfigure}[p]
+    \centering
+    \makebox[\linewidth][r]{\includegraphics[width=1.2\linewidth]{figuras/capitulo4/Modelo4-DualStream-SlidingWindow.pdf}}
+    \caption{Diagrama del modelo \textit{DualStream-SlidingWindow} estático. El vector de contexto físico se extrae globalmente empleando el detector de entropía sobre la captura electromagnética completa, insertando un tensor idéntico en cada ventana de análisis.}
+    \label{fig:slidingwindow_architecture}
+\end{sidewaysfigure}
+
+\begin{sidewaysfigure}[p]
+    \centering
+    \makebox[\linewidth][r]{\includegraphics[width=1.2\linewidth]{figuras/capitulo4/Modelo5-DualStream-SlidingWindowDynamic.pdf}}
+    \caption{Diagrama de la variante \textit{DualStream-SlidingWindow Dynamic}. En contraste con el modelo estático, el cálculo del contexto físico se itera dinámicamente y de manera independiente sobre cada ventana móvil solapada.}
+    \label{fig:dynamic_slidingwindow_architecture}
+\end{sidewaysfigure}
+
+La arquitectura secuencial de la rama temporal se define como sigue:
+
+\begin{itemize}
+    \item Conv1D\_IQ\_1: $k=128$, $s=4$, $p=64$. Proyecta la entrada a $32$ canales. Seguida de \textit{Batch Normalization}, activación ReLU y \textit{max-pooling} ($k=4$).
+    \item Conv1D\_IQ\_2: $k=31$, $s=2$, $p=15$. Proyecta el tensor a $64$ canales. Seguida de \textit{Batch Normalization}, ReLU y \textit{max-pooling} ($k=4$).
+    \item Conv1D\_IQ\_3: $k=7$, $s=1$, $p=3$. Proyecta a $128$ canales. Seguida de \textit{Batch Normalization}, ReLU y \textit{max-pooling} ($k=4$).
+    \item Conv1D\_IQ\_4: $k=3$, $s=1$, $p=1$. Proyecta a $256$ canales. Seguida de \textit{Batch Normalization}, ReLU y \textit{Adaptive Average Pooling} global que colapsa la dimensión espacial.
+    \item Proyección Lineal: Capa densa que reduce el tensor latente temporal de $256$ a $128$ dimensiones.
+\end{itemize}
+
+La rama frecuencial computa la \gls{psd} directamente durante el paso de inferencia en la GPU. Se aplica una ventana de Hann y la \gls{fft} sobre los tensores de entrada, reduciendo la dimensionalidad a 2048 \textit{bins} en escala logarítmica. La secuencia de capas de extracción de esta rama se define mediante los siguientes bloques:
+\begin{itemize}
+    \item Conv1D\_PSD\_1: $k=15$, $s=2$, $p=7$. Proyecta el espectro a $32$ canales. Seguida de \textit{Batch Normalization}, activación ReLU y \textit{max-pooling} ($k=2$).
+    \item Conv1D\_PSD\_2: $k=7$, $s=2$, $p=3$. Proyecta a $64$ canales. Seguida de \textit{Batch Normalization}, ReLU y \textit{max-pooling} ($k=2$).
+    \item Conv1D\_PSD\_3: $k=3$, $s=1$, $p=1$. Proyecta a $128$ canales. Seguida de \textit{Batch Normalization}, ReLU y \textit{Adaptive Average Pooling} global.
+\end{itemize}
+La integración de los datos temporales y frecuenciales se resuelve con el mecanismo \textit{Attention Fusion} descrito en la Sección \ref{subsec:dualstream_attn}, ponderando las características extraídas del dominio que presente menor atenuación en la ventana actual.
+
+Para mitigar el \textit{shortcut learning} analizado en la Sección \ref{subsec:dualstream_attn}, la rama de metadatos se restringe a tres parámetros de contexto: el nivel de ruido global, la entropía media y el \textit{z-score}. Eliminar métricas locales explícitas, como la duración temporal, evita que la red neuronal sesgue sus decisiones hacia umbrales numéricos. 
+
+Para la extracción de estos tres parámetros, los dos modelos de esta familia adoptan estrategias distintas. El modelo \textit{DualStream-SlidingWindow} ejecuta el algoritmo del detector basado en entropía y \gls{cfar} una única vez sobre la captura completa de 75 ms, inyectando un vector de contexto idéntico a todas las ventanas deslizantes del proceso de inferencia. El modelo \textit{DualStream-DynamicSlidingWindow} ejecuta el detector de forma independiente sobre cada ventana solapada analizada, adaptando el vector de contexto a las condiciones electromagnéticas locales de cada subventana. Esta segunda opción exige implementar un cálculo de contingencia (\textit{fallback}) para estimar el \textit{z-score} del ruido en aquellas subventanas que capturan exclusivamente los periodos de silencio entre ráfagas de transmisión.
+
+El vector resultante de la concatenación de la fusión por atención ($128$ dimensiones) y los metadatos contextuales ($16$ dimensiones) se introduce en una cabeza clasificadora formada por una capa densa de $64$ neuronas con activación ReLU, regularización \textit{dropout} ($p=0.3$) y un nodo lineal de salida que produce el logit de decisión binaria.
+
+\subsection{Estrategia de optimización y entrenamiento}
+El entrenamiento, con una duración de 40 épocas, adopta clasificación supervisada a nivel de instancia. La función de coste es la entropía cruzada binaria con logits (\textit{BCEWithLogitsLoss}), aplicada directamente sobre cada ventana del \textit{batch} sin el filtrado GMM descrito en la Sección \ref{subsec:dualstream_attn}. El optimizador es \textit{AdamW} \cite{loshchilov_decoupled_2019}, que se detalla en la Sección \ref{subsec:singlestream_cvcnn}, con tasa de aprendizaje base $\eta = 3\times10^{-4}$ y factor de regularización $\lambda = 10^{-4}$.
+
+La tasa de aprendizaje se gestiona con un planificador \textit{ReduceLROnPlateau} que monitoriza el F1-Score de la fase de Validación. Ante una ausencia de mejora durante 5 épocas consecutivas, reduce la tasa por un factor de $0.5$. El F1 se elige como señal de control en lugar de la pérdida porque, bajo desequilibrio de clases, la pérdida puede descender por ajuste al ruido estadístico mientras el F1 permanece estancado. Dos mecanismos adicionales estabilizan la convergencia: recorte de gradiente con norma máxima $\|g\|_2 \leq 1.0$ \cite{pascanu_difficulty_2013}, necesario porque el \textit{kernel} de 128 muestras genera gradientes de magnitud elevada en las primeras épocas; y entrenamiento en precisión mixta mediante \textit{autocast} y \textit{GradScaler} \cite{micikevicius_mixed_2018}, que permite procesar \textit{batches} de 128 ventanas de 131.072 muestras sin desbordamiento de memoria.
+
+El mecanismo central del entrenamiento vuelve a ser el uso de \textit{data augmentation}, con unas modificaciones que se detallan en este párrafo. Con probabilidad $0.4$, cada muestra de dron con $\text{SNR} \geq 10$\,dB se añade al \textit{batch} como una copia degradada con una \gls{snr} objetivo entre $[-20, -8]$\,dB. Esto genera ventanas de dron a \gls{snr}s extremas con etiquetas correctas, supliendo directamente la escasez de muestras fiables a baja \gls{snr} que en la Sección \ref{subsec:dualstream_deep} obligaba a filtrar el conjunto de entrenamiento por $\text{SNR} \geq 8$\,dB. Al disponer de ejemplos sintéticos correctamente etiquetados en el rango crítico, la función de coste ajusta los pesos sobre estos casos límite sin necesidad de inferir su fiabilidad a posteriori mediante un modelo estadístico.
+
+Siguiendo en esta línea, es fundamental destacar que los dos modelos de esta familia que se han implementado en esta investigación difieren a la hora de calcular las variables escalares sobre los datos creados artificialmente con el \textit{data augmentation}. El \textit{DualStream-SlidingWindow} fuerza el parámetro \textit{z-score} a cero tras degradar la ventana, manteniendo el resto de escalares del tensor original. El modelo \textit{DualStream-DynamicSlidingWindow} relanza el detector de entropía y \gls{cfar} sobre el tensor ya degradado, recalculando los tres parámetros de contexto de forma coherente con el nuevo nivel de ruido e integrando el cálculo de contingencia descrito en la Sección \ref{sec:dualstream_def} para los intervalos sin detección.

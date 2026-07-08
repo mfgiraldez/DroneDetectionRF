@@ -4065,3 +4065,31 @@ La skill IEEE/ACM fue aplicada con las siguientes reglas específicas:
 1. **Estado del Arte**: Se ha acordado incluir en la Sección 2.3 un resumen sobre los límites de rendimiento en regímenes de baja SNR. El borrador indica que los detectores de energía fallan con SNR negativa, las CNN sobre espectrogramas (Ozturk, Glüge) mantienen precisión hasta -10/-12 dB, y mediante preprocesamiento o arquitecturas complejas (Noh, Taleb) se puede rozar los -15 dB. Queda pendiente buscar estos papers e insertar los párrafos formalizados.
 2. **Figuras de Arquitectura**: Queda pendiente generar los esquemas de DualStream-SlidingWindow y DualStream-DynamicSlidingWindow basándose en el template de SingleStream.
 3. **Redacción de Cap. 5 y 6**: Retomar la redacción de Resultados y Discusión con el nuevo protocolo estricto de rigor académico.
+
+### 9. Revisión Integral de los Tutores (Corrección del TFM)
+Durante esta sesión intensiva se ha purgado y refinado el documento (Capítulos 3, 4 y 5) basándonos en los comentarios de los tutores, aplicando un tono académico estricto y eliminando rastros de "AI-isms". Los cambios críticos son:
+
+- **Estandarización de Nomenclatura Matemática (Cap. 3 y 4):** Se corrigió la colisión estructural de variables. $N$ queda bloqueado para el número de muestras temporales ($\sim 10^6$). $N_w$ representa la ventana de Welch/STFT y el número de *bins*. $C_{	ext{in}}$ y $C_{	ext{out}}$ representan los mapas de las CNN.
+- **Detector CFAR y Masking Effect (Cap. 3):** Se analizó la literatura clásica (Anastassopoulos, 1992) para justificar la ineficacia del CFAR ante señales sumergidas en el ruido debido al *masking effect*. Se demostró analíticamente que ignorar el Wi-Fi es una característica altamente deseable del método de entropía para evitar saturar el clasificador en la banda ISM.
+- **Rigor Físico y Estadístico (Cap. 4):** 
+    - Se definió el ruido del Data Augmentation rigurosamente como un **proceso gaussiano complejo propio (CSCG)**.
+    - Se arregló la integración narrativa de la ecuación del estadístico $z_{	ext{peak}}$, justificando el signo negativo de su numerador (caída de entropía) y enlazándolo correctamente con el filtro probabilístico posterior.
+    - Se clarificó la ecuación del optimizador **AdamW**, definiendo correctamente las estimaciones corregidas por sesgo y el desacoplamiento del *weight decay*.
+    - Se reescribió la justificación de los tamaños del *kernel* (campo receptivo temporal) eliminando vaguedades.
+- **Adaptación de Métricas (Cap. 5):** Se validó el uso del término "Exhaustividad" como traducción técnica de *Recall* en la introducción del capítulo, salvando así la coherencia de todas las gráficas generadas (Precision-Recall) sin necesidad de recompilar figuras.
+- **Nueva Regla Operativa (Agent Rule):** Se ha creado el archivo `.agents/AGENTS.md` con la regla mandatoria de **LEER EL CONTEXTO ANTES DE REDACTAR** para asegurar modificaciones orgánicas y no redundantes en LaTeX.
+
+### 10. Expansión y Reescritura del Capítulo 1 (Introducción)
+Se realizó una expansión masiva y reescritura aséptica del Capítulo 1 tras considerar que la versión anterior era demasiado breve (4 páginas) y adolecía de lenguaje rimbombante ("AI-isms"):
+
+- **Contexto técnico ampliado:** Se profundizó en las Radios Definidas por Software (SDR) y en las vulnerabilidades de los sistemas colaborativos (Remote ID).
+- **Problema de la Fase (Justificación de CV-CNN):** Se incorporó una justificación teórica clave sobre cómo los espectrogramas 2D del estado del arte descartan la fase de la señal I/Q, destruyendo la frontera matemática contra el ruido aleatorio en baja SNR.
+- **Sección de Alcance:** Se acotó formalmente el proyecto (banda ISM 2.4 GHz, interferencias OFDM/FHSS, simulación offline por GPU, inyección AWGN hasta -20dB) para asentar expectativas realistas y alinear el capítulo 1 con el 3 y 4.
+- **Contribuciones formales:** Se desglosaron las tres aportaciones principales: el detector de entropía contra OFDM, la topología DualStream-SlidingWindow, y el sostenimiento de la Exhaustividad a -14dB.
+
+## 6. TFM LaTeX: Estandarizacin y Estilo Final
+- Unificacin paramtrica SNR: Se ha consolidado el uso de -12 dB (corte del Grupo D) en toda la tesis.
+- Limpieza de estilo: Se han purgado frases genricas (cabe destacar, en conclusin, etc.) y usos inapropiados y metafricos de las palabras 'analtico' y 'fsico'.
+- Anglicismos: Los trminos tcnicos en ingls han sido encapsulados sistemticamente en \textit{}.
+- Rigor tcnico: Se ha ajustado la comparativa sobre el espectrograma (Caps. 1 y 3), eliminando la palabra 'fracasa' para explicar con precisin cmo el ruido estocstico enmascara la magnitud a muy baja SNR.
+- Estado actual: Captulos 1 al 5 (frontmatter, introduccin, estado del arte, marco terico, arquitectura y resultados) terminados en cuanto a redaccin. Slo faltan imgenes y redaccin del Captulo 6.

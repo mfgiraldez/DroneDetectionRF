@@ -1,0 +1,155 @@
+%%%% Definición de la clase del documento (etsibook) %%%%
+\documentclass[
+    fontsize=10pt, 
+    sides=twoside, 
+    paper=a4
+    ]{etsibook}
+
+
+%%%% Importación de paquetes recomendados/opcionales %%%%
+% Si no necesita alguno, puede comentar la líneas anteponiendo un '%'
+\usepackage[spanish,shorthands=off]{babel} % para especificar un idioma
+\usepackage{amsmath} % para fórmulas matemáticas
+\usepackage{lettrine} % para añadir letra grande al inicio de cada capítulo
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage[acronym,nonumberlist]{glossaries} % para acrónimos/glosario
+\usepackage{listings} % para fragmentos de código
+\usepackage{float} % para usar [H] y fijar tablas/figuras en una posición exacta
+\usepackage{subcaption} % para usar subfiguras con \begin{subfigure}
+\usepackage[section]{placeins} % para controlar que los flotantes no sobrepasen su sección
+\usepackage{booktabs}
+\usepackage[figuresright]{rotating} % siempre rotar CCW para evitar problemas de márgenes
+
+% \usepackage[hidelinks]{hyperref} % para hipervínculos en las referencias
+
+\graphicspath{{figuras/}} % permite buscar imágenes dentro de la carpeta figuras/
+
+
+%%%% Personalización de la portada %%%%
+% \header le permite definir la cabecera del documento 
+\header{Trabajo Fin de Máster\\%
+      Máster en Ingeniería de Telecomunicación}
+      
+% \title define el título de su trabajo. Si es demasiado largo, puede reducir el tamaño de la fuente anteponiendo \smaller{} a su texto: \title{\smaller{}Título}
+\title{Detección de drones mediante Deep Learning aplicado a señales de radiofrecuencia}
+
+% \author le permite indicar el nombre y apellidos del autor
+\author{Manuel Fernández Giráldez}
+
+% \authorlabel le permite modificar el texto "Autor: " de la portada a otro texto. Es útil si son varios autores o si escribe el documento en otro idioma
+\authorlabel{Autor}
+
+% \director le permite definir los Tutores, Directores, etc. de su trabajo. Puede incluir tantos como quiera duplicando la línea. La categoría hace referencia a la vinculación del Profesor: Profesor Titular, Catedrático, etc.
+\director{Tutor}{Juan José Murillo Fuentes}{Catedrático}
+\director{Tutor}{Rafael Boloix Tortosa}{Profesor Titular}
+
+% \date le permite especificar el lugar y fecha de publicación del documento
+\date{Sevilla, 2026}
+
+% \affiliation define el texto de afiliación. Para los TFG o TFM, deberá seguir el ejemplo e indicar el Departamento que dirige su trabajo.
+\affiliation{Dpto. de Teoría de la Señal y Comunicaciones\\%
+        Escuela Técnica Superior de Ingeniería\\%
+        Universidad de Sevilla}
+
+% \optlogo le permite añadir un segundo logotipo a la portada especificando su ruta. Puede comentar la siguiente línea si no quiere añadir ninguno.
+\optlogo{etsi/tsc2.pdf} 
+
+
+%%%% Definición de los términos del glosario %%%%
+% Puede comentar las siguientes líneas si no hay glosario. Más adelante podrá incluir la página de glosarios con la instrucción \printglossaries. 
+\makenoidxglossaries
+\newacronym{llm}{LLM}{\textit{Large Language Model}}
+\newacronym{ofdm}{OFDM}{\textit{Orthogonal frequency-division multiplexing}}
+\newacronym{tcp}{TCP}{\textit{Transmission Control Protocol}}
+\newacronym{udp}{UDP}{\textit{User Datagram Protocol}}
+\newacronym{ism}{ISM}{\textit{Industrial, Scientific, and Medical}}
+\newacronym{sdr}{SDR}{\textit{Software-defined radio}}
+\newacronym{snr}{SNR}{\textit{Signal-to-noise ratio}}
+\newacronym{fhss}{FHSS}{\textit{Frequency Hopping Spread Spectrum}}
+\newacronym{awgn}{AWGN}{\textit{Additive White Gaussian Noise}}
+\newacronym{stft}{STFT}{\textit{Short-Time Fourier Transform}}
+\newacronym{dtft}{DTFT}{\textit{Discrete-Time Fourier Transform}}
+\newacronym{fft}{FFT}{\textit{Fast Fourier Transform}}
+\newacronym{cfar}{CFAR}{\textit{Constant False Alarm Rate}}
+\newacronym{uav}{UAV}{\textit{Unmanned Aerial Vehicle}}
+\newacronym{cv-cnn}{CV-CNN}{\textit{Complex-Valued Convolutional Neural Networks}}
+\newacronym{ml}{ML}{\textit{Machine Learning}}
+\newacronym{cgd}{CGD}{\textit{Complex-Value Gradient Descent}}
+\newacronym{cbn}{CBN}{\textit{Complex-Value Batch Normalization}}
+\newacronym{crelu}{CReLU}{\textit{Complex Rectified Linear Unit}}
+\newacronym{roi}{ROI}{\textit{Regions of Interest}}
+\newacronym{cscg}{CSCG}{\textit{Circularly Symmetric Complex Gaussian}}
+\newacronym{mad}{MAD}{\textit{Median Absolute Deviation}}
+\newacronym{dsp}{DSP}{\textit{Digital Signal Processing}}
+\newacronym{mil}{MIL}{\textit{Multiple Instance Learning}}
+\newacronym{gmm}{GMM}{\textit{Gaussian Mixture Model}}
+\newacronym{psd}{PSD}{\textit{Power Spectral Density}}
+\newacronym{mlp}{MLP}{\textit{Multi-Layer Perceptron}}
+\newacronym{c-uas}{C-UAS}{\textit{Counter-Unmanned Aircraft Systems}}
+
+\renewcommand*{\genacrfullformat}[2]{%
+  \glsentrylong{#1}#2, \glsentryshort{#1}%
+}
+\renewcommand*{\genplacrfullformat}[2]{%
+  \glsentrylongpl{#1}#2, \glsentryshortpl{#1}%
+}
+
+%%%% INICIO DEL DOCUMENTO %%%%
+\begin{document}
+
+%%%% Construcción de la portada y contraportada %%%%
+\maketitle
+
+%%%% Bloque de capítulos no numerados %%%%
+% Es común usar esta parte del documento para indicar agradecimientos, resumen, abstract, etc. Puedes usar \include para importar los contenidos de otro fichero, o escribir \addchap para iniciar capítulos en este bloque.
+
+% Comienza la numeración de las páginas en números romanos
+\frontmatter
+
+% Incluimos los capítulos no numerados
+\include{contenidos/00_frontmatter}
+
+% A continuación se construye el índice
+\tableofcontents 
+
+%%%% Bloque de capítulos numerados %%%%
+% Aquí se incluyen los capítulos numerados. Puedes usar \include para importar los contenidos de otro fichero, o escribir \chapter para iniciar capítulos en este fichero.
+
+% Comienza la numeración normal del documento
+\mainmatter
+
+% Incluimos los capítulos numerados. 
+\include{contenidos/10_introduccion}
+\include{contenidos/20_EstadoDelArte_2}
+\include{contenidos/30_MarcoTeorico}
+\include{contenidos/40_ArquitecturaImplementacion}
+\include{contenidos/50_ResultadosDiscusion}
+\include{contenidos/60_conclusiones}
+
+%%%% Bloque de índices complementarios y glosarios %%%%
+
+% Preparamos la numeración final
+\backmatter
+
+% Incluimos los índices de figuras, tablas, códigos, etc. Puedes comentar aquellos que no utilices
+\listoffigures 
+\listoftables 
+% \lstlistoflistings % sólo si usas el paquete listings
+
+% Incluimos el glosario de acrónimos. Sólo si usas el paquete glossaries
+\printnoidxglossary[type=\acronymtype,title={Glosario}] 
+
+%%%% Bibliografía %%%%
+
+% Puedes comentar las siguientes líneas si no hay bibliografía
+\bibliographystyle{IEEEtran} 
+\bibliography{bibliografia} 
+
+%%%% Bloque de anexos %%%%
+% Indicación del inicio de los anexos. Puedes comentar este bloque si no los utilizas. Los anexos pueden iniciarse con \chapter, o incluyendo el contenido de otro fichero
+% \appendix
+
+% Incluimos los anexos numerados.
+% \include{anexos/A_ejemplo}
+
+\end{document}

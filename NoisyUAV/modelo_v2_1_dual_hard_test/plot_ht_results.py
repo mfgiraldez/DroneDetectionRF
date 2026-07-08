@@ -12,16 +12,29 @@ CSV_PATH = os.path.join(OUT_DIR, "ht_golden_results.csv")
 
 TARGET_HELD_OUT = 5   # Taranis — nunca visto en entrenamiento
 
+# Estilo académico unificado
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Times New Roman"],
+    "font.size": 11,
+    "axes.titlesize": 13,
+    "axes.labelsize": 12,
+    "legend.fontsize": 10,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "figure.titlesize": 14
+})
+
 TARGET_NAMES_FIXED = {
     0: "DJI (T0)", 1: "FutabaT14 (T1)", 2: "FutabaT7 (T2)",
-    3: "Graupner (T3)", 5: "Taranis (T5) ★", 6: "Turnigy (T6)",
+    3: "Graupner (T3)", 5: "Taranis (T5)", 6: "Turnigy (T6)",
     4: "Ruido (T4)",
 }
 TARGET_COLORS_FIXED = {
-    0: "#3F37C9", 1: "#D62828", 2: "#118AB2",
-    3: "#2D6A4F", 5: "#FF6B35", 6: "#7B2D8B",
+    0: "#1A237E", 1: "#D62828", 2: "#118AB2",
+    3: "#2D6A4F", 5: "#E07C00", 6: "#7B2D8B",
 }
-FIGSAVE_FIXED = dict(dpi=150, bbox_inches="tight")
+FIGSAVE_FIXED = dict(dpi=300, bbox_inches="tight", format="pdf")
 
 def main():
     if not os.path.exists(CSV_PATH):
@@ -59,10 +72,10 @@ def main():
     fig, ax = plt.subplots(figsize=(6, 5))
     sns.heatmap(cm, annot=True, fmt=".2%", cmap="Blues", linewidths=0.4, linecolor="#1a1a2e",
                 xticklabels=['Ruido', 'Dron'], yticklabels=['Ruido', 'Dron'], ax=ax)
-    ax.set_title("Hard Test V2.1 - Matriz de Confusion Global\n(Umbral: 0.75 | Target=5 Taranis no visto en train)", fontsize=12, pad=12)
+    ax.set_title("Matriz de Confusión sobre el Conjunto de Test\nTaranis T5 = HELD-OUT, nunca visto durante el entrenamiento", fontweight="bold", pad=12)
     ax.set_ylabel("Real", fontsize=11); ax.set_xlabel("Predicho", fontsize=11)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_confusion_matrix.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_confusion_matrix.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: confusion_matrix")
 
@@ -90,7 +103,7 @@ def main():
     ax.set_title("Hard Test V2.1 - Curva de Precision-Recall\n(Target=5 Taranis excluido del entrenamiento)", fontsize=13)
     ax.legend(fontsize=9, loc="lower left"); ax.grid(True, alpha=0.2)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_pr_curve.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_pr_curve.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: pr_curve")
 
@@ -110,7 +123,7 @@ def main():
     ax.set_title("Hard Test V2.1 - Curva ROC\n(Target=5 Taranis excluido del entrenamiento)", fontsize=13)
     ax.legend(fontsize=10, loc="lower right"); ax.grid(True, alpha=0.2)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_roc_curve.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_roc_curve.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: roc_curve")
 
@@ -129,17 +142,22 @@ def main():
     global_recall = [drones[drones['snr'] == s]['correct'].mean() for s in snrs]
     ax.plot(snrs, global_recall, marker="D", markersize=6, linewidth=2.5,
             color="#1A1A1A", linestyle="--", label="Media Global (Drones)", zorder=5)
+
     ax.axvspan(-20, -7,  alpha=0.07, color="red",    label="Grupo C")
     ax.axvspan(-6,   9,  alpha=0.05, color="yellow", label="Grupo B")
     ax.axvspan(10,  30,  alpha=0.07, color="green",  label="Grupo A")
-    ax.set_xlabel("SNR (dB)", fontsize=12); ax.set_ylabel("Recall", fontsize=12)
-    ax.set_title("Hard Test V2.1 - Recall vs SNR\n(cuadrados naranjas = Taranis T5, HELD-OUT, nunca visto en entrenamiento)", fontsize=12)
+    
+    ax.set_xlabel("Relación Señal a Ruido (SNR) [dB]")
+    ax.set_ylabel("Tasa de Detección (Recall)")
+    ax.set_title("Tasa de Detección por Emisor RF en función de la SNR\nTaranis T5 = HELD-OUT, nunca visto durante el entrenamiento", fontweight="bold")
+    
     ax.set_ylim(-0.05, 1.05); ax.set_xlim(min(snrs)-1, max(snrs)+1)
     ax.xaxis.set_major_locator(mticker.MultipleLocator(2))
     ax.grid(True, alpha=0.2, color="gray")
+    
     ax.legend(fontsize=8, loc="lower right", ncol=2)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_recall_snr_lines.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_recall_snr_lines.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: recall_snr_lines")
 
@@ -157,7 +175,7 @@ def main():
     ax.set_ylim(-0.05, 1.05); ax.xaxis.set_major_locator(mticker.MultipleLocator(2))
     ax.grid(True, alpha=0.2, color="gray"); ax.legend(fontsize=10, loc="lower right")
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_accuracy_snr.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_accuracy_snr.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: accuracy_snr")
 
@@ -170,17 +188,17 @@ def main():
                 cbar_kws={'label': 'Recall / Especificidad'})
     ax.set_ylabel("Emisor RF", fontsize=12)
     ax.set_xlabel("SNR (dB)", fontsize=12)
-    ax.set_title("Hard Test V2.1 - Mapa de Calor de Rendimiento\n"
-                 "(★ Taranis T5 = HELD-OUT, nunca visto durante el entrenamiento)", fontsize=13)
-    # Resaltar la fila de T5 con un borde
-    t5_row_idx = list(hm_data.index).index("Taranis (T5) ★") if "Taranis (T5) ★" in hm_data.index else None
-    if t5_row_idx is not None:
-        ax.add_patch(plt.Rectangle(
-            (0, t5_row_idx), len(hm_data.columns), 1,
-            fill=False, edgecolor='#FF6B35', lw=3, clip_on=False
-        ))
+    ax.set_title("Mapa de Calor: Tasa de Acierto por Clase y SNR\nTaranis T5 = HELD-OUT, nunca visto durante el entrenamiento", fontweight="bold")
+    ax.set_xlabel("Relación Señal a Ruido (SNR) [dB]")
+    ax.set_ylabel("Emisor RF")
+
+    # Add dashed rectangle around Taranis T5 row
+    # Find index of Target 5 in the heatmap index
+    t5_idx = list(hm_data.index).index(TARGET_NAMES_FIXED.get(TARGET_HELD_OUT))
+    ax.add_patch(plt.Rectangle((0, t5_idx), len(hm_data.columns), 1, 
+                               fill=False, edgecolor='black', linestyle='--', lw=3, clip_on=False))
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_heatmap_snr_target.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_heatmap_snr_target.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: heatmap_snr_target")
 
@@ -204,7 +222,7 @@ def main():
                 ha='center', fontsize=9, fontweight='bold')
     plt.xticks(rotation=25, ha='right')
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "ht_recall_per_target.png"), **FIGSAVE_FIXED)
+    fig.savefig(os.path.join(OUT_DIR, "ht_recall_per_target.pdf"), **FIGSAVE_FIXED)
     plt.close(fig)
     print("OK: recall_per_target")
 

@@ -1,0 +1,289 @@
+% ═══════════════════════════════════════════════════════════════════════════════
+%  Capítulo 2,  Estado del Arte
+%  TFM: Detección de Aeronaves No Tripuladas mediante Señales de RF y
+%       Redes Neuronales de Valor Complejo en Entornos de Baja SNR
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\chapter{Estado del Arte}
+\label{cap:EstadoDelArte}
+
+\lettrine[lraise=-0.1, lines=2, loversize=0.2]{L}{a} detección y clasificación de \gls{uav} mediante señales de radiofrecuencia es un campo de investigación en rápida evolución. La intersección entre el procesamiento de señales físicas, el aprendizaje profundo y la seguridad electromagnética ha dado lugar a una literatura heterogénea que abarca desde enfoques clásicos basados en la extracción manual de características hasta arquitecturas de aprendizaje extremo a extremo que operan directamente sobre la señal en cuadratura. En este capítulo se revisan de forma sistemática y crítica los trabajos más relevantes, organizados en cuatro bloques temáticos: los sistemas de detección basados en señales RF y su posicionamiento frente a modalidades alternativas, los enfoques de aprendizaje automático para la clasificación de señales electromagnéticas, las redes neuronales de valor complejo y sus fundamentos teóricos, y las técnicas de aprendizaje semi-supervisado aplicables a datos con etiquetado ruidoso. El capítulo concluye con una evaluación crítica de los conjuntos de datos públicos disponibles y con el posicionamiento explícito de la contribución de este trabajo respecto al estado del arte revisado.
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Sistemas de detección de UAVs basados en señales RF}
+\label{sec:sistemas_deteccion_rf}
+% ══════════════════════════════════════════════════════════════════════════════
+
+La detección de \gls{uav} puede abordarse mediante un amplio abanico de modalidades, cada una con ventajas e inconvenientes relativamente bien caracterizados en función del escenario donde se pretenda realizar esta operación. Esta sección analiza las cuatro tecnologías de detección predominantes en los sistemas de vanguardia actuales y justifica por qué la detección basada en señales de radiofrecuencia constituye la modalidad más adecuada para el problema planteado en este trabajo.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Comparativa de modalidades de detección}
+\label{subsec:comparativa_modalidades}
+% ──────────────────────────────────────────────────────────────────────────────
+
+La Tabla~\ref{tab:comparativa_modalidades} sintetiza las principales características operativas de las cuatro modalidades de detección de \gls{uav} más empleadas en la literatura y en sistemas de detección actuales.
+
+\begin{table}[H]
+\centering
+\caption{Comparativa de modalidades de detección de \glspl{uav}.}
+\label{tab:comparativa_modalidades}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllll}
+\toprule
+\textbf{Modalidad} & \textbf{Principio de detección} & \textbf{Ventaja principal} & \textbf{Limitación principal} & \textbf{Rango típico} \\
+\midrule
+Radiofrecuencia \cite{DEMACEDO2025100511, ezuma_detection_2020} & Análisis del enlace C\&C \gls{rf} & Detección temprana; pasivo & Fallo de \glspl{uav} autónomos & 0,3--3,5\,km \\
+Radar activo \cite{martelli_exploitation_2020} & Reflexión electromagnética & Todo tipo de \glspl{uav}; largo alcance & Falsos positivos (aves) & 3--10\,km \\
+EO/IR \cite{salhi_design_2025} & Imagen visible/térmica & Identificación visual & Requiere \gls{los}; día/noche & 0,5--3\,km \\
+Acústico \cite{he_multimodal_2025} & Firma de rotor y motor & Detecta \glspl{uav} sin \gls{rf} activo & Rango muy corto; ruido ambiental & 0,1--0,5\,km \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Radar activo.}\mbox{}\\[0.5em] El radar activo constituye la solución de mayor alcance para la detección de dispositivos aéreos. Su principio de funcionamiento, basado en el análisis de los ecos de retrodispersión de los pulsos electromagnéticos emitidos, permite detectar cualquier objeto sin la necesidad de captar su emisión. Sin embargo, la \gls{rcs} de los \glspl{uav} de pequeño tamaño, especialmente los de estructura plástica con rotores de pequeño diámetro, es comparable a la de aves de tamaño medio, lo que eleva la tasa de falsas alarmas hasta niveles inaceptables en ausencia de discriminadores adicionales. La firma de micro-Doppler inducida por la rotación de las palas ha sido empleada precisamente como un indicador adicional \cite{martelli_exploitation_2020}, aunque su eficacia disminuye a distancias superiores a 1\,km y con viento cruzado. Por otra parte, el coste de los sistemas radar aptos para detección de drones es significativamente superior al de los sistemas pasivos que usan \gls{rf}, lo que limita su despliegue \cite{semkin_analyzing_2020}.
+
+\paragraph{Detección electroóptica e infrarroja.}\mbox{}\\[0.5em] Los sistemas electroópticos e infrarrojos (EO/IR) permiten la identificación visual y térmica del \gls{uav}. Su principal limitación es la dependencia de la \gls{los}, que los hace vulnerables a obstrucciones físicas en entornos urbanos o boscosos. La eficacia de las cámaras térmicas se ve comprometida durante los períodos de cruce térmico, transición crepuscular en la que la temperatura del dispositivo es similar a la del fondo, y su alcance práctico en condiciones de visibilidad reducida no supera los 500\,m para drones de pequeño tamaño. Aunque los sistemas EO/IR son imprescindibles como capa de confirmación en arquitecturas \gls{c-uas} basadas en múltiples sensores, su uso como sensor primario de detección no es viable en escenarios con visibilidad limitada \cite{salhi_design_2025}.
+
+\paragraph{Detección acústica.}\mbox{}\\[0.5em] Los sistemas acústicos explotan la firma sonora característica generada por los motores eléctricos y los rotores de los \gls{uav}. Su principal ventaja es la capacidad de detección de plataformas sin emisión RF activa (al igual que sistemas radar), incluyendo \gls{uav} autónomos o silenciados electrónicamente. Sin embargo, el rango operativo de los micrófonos de campo, típicamente entre 100 y 500\,m, los limita a roles de alerta de última distancia, y su rendimiento se degrada severamente en entornos con nivel sonoro ambiental elevado, como zonas urbanas, puertos o aeródromos. Combinados con algoritmos de clasificación basados en redes neuronales, estos sistemas han demostrado tasas de detección superiores al 90\,\% en condiciones de laboratorio, aunque su reproducibilidad en campo es significativamente menor \cite{he_multimodal_2025}.
+
+\paragraph{Radiofrecuencia: justificación de la elección.}\mbox{}\\[0.5em]
+% Reescrito: eliminados marcadores de lista robóticos (En primer/segundo/tercer lugar, Finalmente)
+La detección mediante \gls{rf} opera de forma completamente pasiva, sin emisión de energía que delate al sistema de detección, lo que la hace compatible con doctrinas de silencio electromagnético. Su alcance operativo típicamente oscila entre 300\,m y 3,5\,km para \gls{uav} con potencia de transmisión estándar, superando en la mayoría de los casos a las modalidades acústica y EO/IR. El análisis de la señal \gls{rf} permite además obtener información sobre el protocolo empleado y, por extensión, sobre el modelo de \gls{uav} y la identidad del piloto mediante triangulación, aportando un valor de inteligencia que las demás modalidades no pueden proporcionar \cite{ezuma_detection_2020, alam_rf-enabled_2023}. Por último, su coste de despliegue, basado en receptores \gls{sdr} de bajo precio, es cualitativamente inferior al de los sistemas radar o EO/IR de prestaciones equivalentes.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Dominios de representación de la señal de \gls{rf}}
+\label{subsec:representaciones_iq}
+% ──────────────────────────────────────────────────────────────────────────────
+
+La señal capturada por un receptor \gls{sdr} se representa en banda base compleja mediante las componentes en fase (I, \textit{in-phase}) y en cuadratura (Q, \textit{quadrature}), cuya relación con la señal de paso de banda real $s(t)$ es:
+
+\begin{equation}
+  s(t) = I(t)\cos(2\pi f_c t) - Q(t)\sin(2\pi f_c t),
+\end{equation}
+
+donde $f_c$ es la frecuencia portadora central. La señal en banda base compleja $\tilde{s}(t) = I(t) + jQ(t)$ constituye la representación más informativa disponible, pues preserva íntegramente la amplitud instantánea $A(t) = |\tilde{s}(t)|$ y la fase $\phi(t) = \angle\tilde{s}(t)$ de la señal modulada \cite{oppenheim_discrete_2014, valkama_blind_2005}.
+
+A partir de la señal IQ en bruto se pueden derivar diversas representaciones secundarias, cada una con propiedades diferentes desde el punto de vista del aprendizaje automático:
+
+\begin{itemize}
+  \item \gls{psd}: obtenida mediante la
+  Transformada de Fourier en Tiempo Discreto (\gls{dtft}) o la Transformada de Fourier en Tiempo Corto (\gls{stft}), proporciona una representación en el dominio de la frecuencia que facilita la inspección visual y la extracción de características espectrales. No obstante, la transformación al dominio de la frecuencia implica una pérdida de información de fase, que resulta especialmente relevante en la discriminación de protocolos de modulación distintos con espectros de potencia similares.
+
+  \item Espectrograma: corresponde al módulo al cuadrado de la \gls{stft},
+  representando la distribución de energía en el plano tiempo-frecuencia. Su interpretación como imagen bidimensional ha motivado la aplicación de redes convolucionales 2D de visión artificial al problema de clasificación de señales \cite{gluge_robust_2024}.
+
+  \item IQ en bruto: la secuencia temporal $[I_0, Q_0, I_1, Q_1, \ldots]$,
+  organizada como un tensor bidimensional de dimensión $[2 \times N]$, donde N es el número de muestras de la secuencia, constituye la representación de máxima fidelidad. Los modelos que operan sobre IQ en bruto pueden explotar la información de fase de forma implícita a través de los filtros convolucionales, sin necesidad de transformaciones previas \cite{zheng_deep_2025}.
+\end{itemize}
+
+La elección de la representación de entrada condiciona la arquitectura del sistema de aprendizaje. Los trabajos recientes más competitivos que operan sobre señal IQ en bruto, incluyendo las redes neuronales de valor complejo, han demostrado que la preservación de la fase puede suponer mejoras de hasta 10 puntos porcentuales en exactitud de clasificación respecto a enfoques equivalentes basados en módulo o \gls{psd} en regímenes de baja \gls{snr} \cite{alam_rf-enabled_2023}.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{El canal ISM y la coexistencia OFDM-FHSS}
+\label{subsec:canal_ism}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Los principales fabricantes comerciales de \glspl{uav} (DJI, Autel, Parrot, Yuneec, entre otros) operan sus enlaces de comunicaciones en las bandas Industriales, Científicas y Médicas (\gls{ism}). Aunque la designación \gls{ism} incluye múltiples segmentos del espectro, el estándar predominante en el sector es la subbanda de 2,4,GHz, objeto de análisis en este trabajo. El uso de estas bandas es libre y no requiere licencia de transmisión. Su única restricción consiste en el cumplimiento de la normativa de la Unión Internacional de Telecomunicaciones (ITU), que impone límites a la potencia radiada y exige tolerancia frente a interferencias externas. Esto obliga a los sistemas \gls{c-uas} a operar en entornos electromagnéticos altamente congestionados.
+
+\paragraph{Conflicto de protocolos: OFDM frente a \gls{fhss}.}\mbox{}\\[0.5em] La banda \gls{ism} de 2,4~GHz está dominada por redes inalámbricas de área local (estándar Wi-Fi, familia IEEE~802.11) y periféricos de área personal que usan principalmente Bluetooth como protocolo de comunicación. El estándar Wi-Fi emplea Multiplexación por División de Frecuencias Ortogonales (\gls{ofdm}), que distribuye la información sobre múltiples subportadoras ortogonales. El resultado es una distribución espectral de potencia plana, de alta energía y con ciclos de trabajo continuos durante la transferencia de datos. Para garantizar la robustez del enlace de mando en ese entorno electromagnético tan saturado, los controladores de los drones implementan Espectro Ensanchado por Salto de Frecuencia (\gls{fhss}). En una arquitectura \gls{fhss}, el transmisor y el receptor cambian de frecuencia de forma sincronizada, cientos o miles de veces por segundo, siguiendo una secuencia pseudoaleatoria configurada previamente. La huella espectral resultante consiste en ráfagas o \textit{bursts} de muy corta duración, dispersas en frecuencia y con un ancho de banda que suele oscilar entre los $20$ y los $100~MHz$, dependiendo del sistema de transmisión. 
+
+Esta situación genera que en la misma banda se tengan transmisiones con distintas características: por un lado, las transmisiones Wi-Fi ocupan un amplio segmento continuo con una duración temporal extensa; mientras que las distintas variantes de \gls{fhss} usadas por los drones y dispositivos Bluetooth se caracterizan por transmisiones con una alta variación en su frecuencia central, ancho de banda relativamente bajo en comparación con su frecuencia de operación y una duración temporal generalmente menor que el resto de transmisiones que se realizan en esta banda. Esto provoca que los detectores de energía usados históricamente resulten inviables en este contexto. Las señales de los puntos de acceso Wi-Fi del entorno impactan en la antena del sistema \gls{c-uas} con una potencia varios órdenes de magnitud superior a la del \textit{burst} \gls{fhss} radiado por un dron situado a cientos de metros. Esta asimetría de potencias impide separar estadísticamente las ráfagas del dron de las interferencias producidas por las transmisiones de Wi-Fi mediante detectores no adaptativos, produciendo tasas de falsos positivos muy altas \cite{wang_rf-based, Swinney_rf-detection}.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{El protocolo FHSS y sus propiedades discriminantes}
+\label{subsec:fhss}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Los protocolos de radiocontrol empleados por los \gls{uav} comerciales, siendo algunos ejemplos Futaba FASST, FrSky ACCESS/D16, Graupner HoTT y TBS Crossfire; se basan en \gls{fhss}. Como se ha comentado anteriormente, en este tipo de protocolo el transmisor cambia periódicamente la frecuencia central de la portadora según una secuencia pseudoaleatoria conocida únicamente por los equipos emparejados, con el objetivo de reducir la susceptibilidad a la interferencia cocanal y dificultar la intercepción de la comunicación por dispositivos que no sean el receptor al que van dirigidas las transmisiones.
+
+Las propiedades físicas del \gls{fhss} tienen consecuencias directas para el diseño del detector:
+
+\begin{enumerate}
+ \item Duración del salto: Cada salto individual ocupa una ventana temporal determinada por el \textit{hardware} del transmisor, típicamente entre 0,5,ms y 5,ms para la telemetría de los drones. En condiciones ideales, esta métrica permite diferenciar las ráfagas cortas de estos dispositivos frente a otras transmisiones de mayor duración. Sin embargo, su explotación analítica presenta dificultades en función de la \gls{snr} de la señal recibida. En escenarios de alta \gls{snr}, la duración resulta ambigua frente a dispositivos Bluetooth u otros sistemas que también empleen \gls{fhss}, cuyas ventanas de transmisión son prácticamente idénticas a las de los drones. Por su parte, en regímenes de baja \gls{snr}, el ruido térmico corrompe los transitorios de la señal IQ, dificultando la extracción directa de la duración a partir de la señal en bruto. Esta doble limitación justifica que el sistema propuesto estime la duración temporal y discrimine interferencias apoyándose predominantemente en la \gls{psd} \cite{ezuma_detection_2020, rout_novel_2025}.
+
+ \item Número de saltos y tasa de repetición: Los protocolos de control y telemetría de los drones presentan una tasa de refresco específica que define el número de ráfagas emitidas por unidad de tiempo. En una ventana de observación temporal arbitraria, el recuento total de saltos detectados y su patrón de periodicidad conforman una firma temporal característica. Esta métrica resulta discriminante frente al ruido \gls{awgn} y a interferencias de banda ancha, las cuales carecen de este comportamiento estrictamente periódico \cite{ezuma_micro-uav_2019, vasant_ahirrao_rf-based_2024}.
+
+ \item Características del ancho de banda: Una transmisión \gls{fhss} concentra su energía en un segmento espectral estrecho (generalmente inferior a unos pocos megahercios). Por el contrario, las transmisiones basadas en el estándar \gls{ofdm} distribuyen su potencia a lo largo de un canal mucho más amplio mediante múltiples subportadoras ortogonales. Esta marcada diferencia en la concentración de energía espectral constituye un discriminador muy eficaz para la detección de drones, siempre que la \gls{snr} sea lo suficientemente elevada para estimar el ancho de banda correctamente cite{ezuma_detection_2020}.
+\end{enumerate}
+
+Basándose en estas particularidades del protocolo \gls{fhss}, en este proyecto se ha diseñado una herramienta de detección de transmisiones (de cualquier tipo, incluídas las que no pertenecen a drones) capaz de explotar conjuntamente dichas características.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Sistemas \gls{c-uas} Comerciales y Militares}
+\label{subsec:sistemas_comerciales}
+% ──────────────────────────────────────────────────────────────────────────────
+
+El mercado de los sistemas \gls{c-uas} ha crecido de forma sostenida desde 2020. Valorado en aproximadamente 2.700 millones de dólares en 2024, se proyecta que alcance los 11.000 millones antes de 2030, según estimaciones de diversos informes sectoriales \cite{dod_cuas_2021}. A continuación se describen los sistemas más representativos, con énfasis en su modalidad de detección y sus capacidades operativas documentadas.
+
+\paragraph{DroneSentry y RfPatrol.}\mbox{}\\[0.5em] 
+DroneShield es una empresa australiana especializada en \gls{c-uas} cuya plataforma \textit{DroneSentry} implementa una detección multicapa basada en la fusión de sensores RF, radar de onda continua y cámaras electroópticas. El módulo RF analiza el espectro entre 70\,MHz y 6\,GHz, siendo capaz de identificar protocolos de control DJI, Futaba y otros fabricantes comerciales mediante análisis espectral en tiempo real. Su variante portátil \textit{RfPatrol} está concebida para protección de personal en movimiento y ha sido desplegada por unidades militares de varios países aliados de la OTAN. Ambas plataformas han sido objeto de contratos multimillonarios con organismos de defensa de Estados Unidos y la Unión Europea durante el período 2024-2025.
+
+\paragraph{Dedrone RF-300.}\mbox{}\\[0.5em] Dedrone, empresa de origen alemán actualmente con sede en Estados Unidos, ofrece \textit{DedroneRF-300}, un sistema pasivo de detección RF que opera mediante el análisis de las bandas \gls{ism} de 2,4\,GHz y 5,8\,GHz. El sistema incorpora una base de datos de firmas espectrales de más de 500 modelos de \gls{uav} comerciales y militares, permitiendo la identificación por protocolos y la geolocalización del piloto mediante triangulación de la señal de control. Ha sido desplegado en eventos de alta seguridad, incluyendo el Foro Económico Mundial de Davos y diversas instalaciones de la Agencia Central de Inteligencia (CIA).
+
+\paragraph{Thales RAPIDFire y sistemas de energía dirigida.}\mbox{}\\[0.5em] Thales ha desarrollado el sistema \textit{RAPIDFire}, originalmente concebido como cañón antiaéreo, que ha sido adaptado para la neutralización de \gls{uav} mediante proyectiles de alta cadencia de tiro. En paralelo, el creciente interés en los sistemas de energía dirigida, en particular el láser de alta energía y los emisores de microondas de alta potencia (HPM), refleja la búsqueda de soluciones de neutralización con menor coste por disparo y menor riesgo de daños colaterales en entornos urbanos. Sin embargo, estos sistemas requieren que la detección y el seguimiento del objetivo estén garantizados con anterioridad a la neutralización, lo que sitúa a los módulos de detección RF como el primer eslabón imprescindible de la cadena \gls{c-uas}.
+
+\paragraph{AUDS (\textit{Anti-UAV Defence System}).}\mbox{}\\[0.5em] El sistema AUDS, desarrollado conjuntamente por Chess Dynamics, Enterprise Control Systems y Blighter Surveillance Systems, combina radar de escaneo electrónico, cámara electroóptica de largo alcance e inhibidor de radiofrecuencia (\textit{jammer}). Su arquitectura permite la detección a distancias de hasta 8\,km , dependiendo de las condiciones atmosféricas y el tamaño del \gls{uav}, y la neutralización mediante la inhibición selectiva de las frecuencias de telemetría y control. Ha sido evaluado por el Ministerio de Defensa del Reino Unido y desplegado en operaciones en el teatro de operaciones de Oriente Próximo.
+
+\paragraph{Rafael Drone Dome.}\mbox{}\\[0.5em] El sistema israelí \textit{Drone Dome}, desarrollado por Rafael Advanced Defense Systems, representa la arquitectura \gls{c-uas} de referencia en escenarios de alta intensidad. Integra radares 3D de banda X, sensores electroópticos/infrarrojos y un sistema de guerra electrónica capaz de bloquear los canales de telemetría GPS y RF. Adicionalmente, incorpora un módulo de neutralización mediante láser de estado sólido de alta potencia. El sistema fue desplegado durante los Juegos Olímpicos de Tokio 2020 y se ha empleado operativamente en la protección del espacio aéreo israelí frente a incursiones de \gls{uav} procedentes del Líbano y Gaza.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Aprendizaje máquina para la detección de señales RF de UAV}
+\label{sec:ml_deteccion_rf}
+% ══════════════════════════════════════════════════════════════════════════════
+
+La aplicación del aprendizaje máquina (\gls{ml}) a la detección de drones mediante señales de radiofrecuencia ha experimentado una evolución metodológica sustancial en los últimos años. Históricamente, los sistemas de clasificación se han fundamentado en el paradigma clásico de extracción manual de características, basando la detección exclusivamente en firmas temporales y espectrales predefinidas \cite{medaiyese_machine_2021, ezuma_micro-uav_2019}. Sin embargo, el estado del arte actual está dominado por arquitecturas de aprendizaje profundo (\gls{dl}) de extremo a extremo. Estas redes neuronales suprimen la estricta dependencia de la ingeniería de características, al ser capaces de aprender representaciones latentes e información subyacente directamente a partir de los datos en bruto \cite{allahham_dronerf_2019, zheng_deep_2025}. Este salto metodológico supone una ventaja crítica frente al \gls{ml} tradicional: en escenarios donde se dispone de escasa información \textit{a priori} sobre la naturaleza de la señal, resulta sumamente complejo diseñar descriptores matemáticos óptimos. Ante esta limitación analítica, los enfoques clásicos se ven abocados a utilizar estadísticos genéricos (valores medios, máximos, mínimos o varianzas) que a menudo resultan insuficientes para capturar la complejidad real del problema. A continuación, se expone una revisión crítica de los paradigmas más destacados en la investigación, estructurándolos de acuerdo con la profundidad del modelo neuronal y la naturaleza de la representación de entrada empleada.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Enfoques clásicos de aprendizaje automático}
+\label{subsec:ml_clasico}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Las investigaciones iniciales sentaron las bases del \textit{RF fingerprinting} para \gls{uav} mediante la extracción manual de características estadísticas sobre la señal IQ en banda base \cite{ezuma_micro-uav_2019, ezuma_detection_2020}. Estos planteamientos propusieron incluir momentos de orden superior como la kurtosis o el \textit{skewness}, así como estadísticos espectrales y parámetros propios del transitorio de activación de las comunicaciones. Para procesar este conjunto de descriptores, diversos autores han empleado de forma extensiva clasificadores supervisados tradicionales, obteniendo resultados notables en condiciones de alta relación señal a ruido (\gls{snr}).
+
+Por ejemplo, técnicas basadas en máquinas de vectores soporte (\textit{Support Vector Machine}, SVM), k-vecinos más próximos (kNN) y bosques aleatorios (\textit{Random Forest}) han demostrado ser sumamente eficaces en la literatura. Trabajos como los desarrollados por Medaiyese et al. \cite{medaiyese_machine_2021} o Vasant et al. \cite{vasant_ahirrao_rf-based_2024} confirman altas tasas de precisión utilizando herramientas como XGBoost y SVM para clasificar señales de controladores de drones. Asimismo, enfoques apoyados en redes neuronales densas convencionales \cite{allahham_dronerf_2019} o sistemas basados en aprendizaje automático para la detección genérica de baja \gls{snr} \cite{lacy_machine_2024} han validado reiteradamente la viabilidad de identificar plataformas comerciales a partir de sus transmisiones.
+
+A pesar de estos éxitos, las limitaciones de la aproximación clásica emergen de forma evidente bajo condiciones electromagnéticas adversas. La extracción manual de características requiere un profundo conocimiento \textit{a priori} del protocolo de comunicaciones y de la modulación específica empleada por el dispositivo objetivo. Además, discriminadores como la kurtosis presentan una acusada varianza en el límite del ruido térmico, degradándose severamente al mezclarse con señales interferentes. Este escenario, sumado a la dificultad de generalizar las reglas de extracción a nuevos modelos comerciales, motivó a la comunidad científica a pivotar hacia las técnicas de aprendizaje profundo, cuya virtud reside en deducir las representaciones óptimas directamente a partir de la señal original.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Redes neuronales convolucionales sobre representaciones tiempo-frecuencia}
+\label{subsec:cnn_2d}
+% ──────────────────────────────────────────────────────────────────────────────
+El uso de redes neuronales convolucionales bidimensionales (CNN-2D) alimentadas con espectrogramas ha sido el enfoque predominante entre los años 2019 y 2024. La conversión de la señal temporal a una representación tiempo-frecuencia permite readaptar arquitecturas previamente consolidadas en el campo de la visión artificial al dominio radioeléctrico de forma directa.
+
+Numerosos estudios demuestran la viabilidad de este enfoque \cite{olesinski_radio_2023, cai_toward_2024}. Específicamente, el trabajo de Glüge \textit{et al.} \cite{gluge_robust_2024} evalúa la detección en entornos de baja \gls{snr} (hasta $-20$\,dB) con presencia de interferencias Wi-Fi y Bluetooth. Mediante el uso de una arquitectura CNN-2D sobre espectrogramas de $256\times256$ píxeles, el sistema alcanza una alta exactitud, estableciéndose en la actualidad como un modelo de referencia en la literatura. Por su parte, Alam \textit{et al.} \cite{alam_rf-enabled_2023} diseñaron un modelo multiescala con módulos de resolución variable. Este planteamiento demuestra que combinar ventanas de observación cortas (para caracterizar los transitorios) y largas (para extraer características en estado estacionario) mejora la robustez del detector, si bien su evaluación no abarcó escenarios con \gls{snr} negativa.
+
+La herencia directa de la visión artificial ha motivado la exploración de arquitecturas más profundas y especializadas. Autores como Zhao \textit{et al.} \cite{zhao_drone_2024} y Olesiński \textit{et al.} \cite{olesinski_radio_2023} abordan la detección electromagnética como un problema clásico de detección de objetos, proponiendo la adaptación de modelos consolidados como la familia YOLO (\textit{You Only Look Once}) o arquitecturas basadas en bloques residuales (ResNet) para identificar y delimitar la región de interés temporal y frecuencial de las emisiones en el espectrograma. Asimismo, para implementaciones con severas restricciones computacionales, estudios recientes introducen variantes ligeras de estas redes profundas que logran mantener una alta capacidad de extracción de características espectrales sin comprometer la eficiencia general del sistema \cite{cai_toward_2024}.
+
+A pesar de estos resultados, la adaptación de arquitecturas profundas de visión artificial al dominio radioeléctrico presenta dos limitaciones críticas. En primer lugar, estos modelos heredan una enorme carga computacional, contabilizando a menudo decenas de millones de parámetros entrenables. Esta extrema complejidad exige \textit{hardware} de altas prestaciones para garantizar tiempos de inferencia viables, lo que dificulta severamente su despliegue en plataformas o sistemas embebidos. En segundo lugar, los sistemas basados exclusivamente en espectrogramas de magnitud sufren una limitación estructural inherente: la eliminación de la información de fase. Cuando se analizan señales con distribuciones de potencia similares, como un salto \gls{fhss} y un paquete Bluetooth, la fase de la portadora constituye una característica discriminante clave. Para mitigar esta pérdida de información e incrementar la eficiencia, las investigaciones más recientes optan por omitir la transformación espectral y procesar la señal original de forma directa.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Modelos sobre la señal I/Q sin procesar: redes 1D y arquitecturas recurrentes}
+
+\label{subsec:cnn_1d}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Para superar las limitaciones computacionales y estructurales de las representaciones bidimensionales, la literatura reciente apuesta firmemente por arquitecturas diseñadas para procesar la señal de radiofrecuencia en su formato nativo (muestras IQ). Operar directamente sobre la serie temporal en bruto proporciona una doble ventaja estratégica. Analíticamente, explota de forma intrínseca la información de fase de la portadora, lo que habilita la discriminación precisa entre colisiones de banda estrecha (como las superposiciones Bluetooth-dron) y aislamientos frente al ruido térmico. A nivel de ingeniería, al prescindir de costosas etapas de preprocesamiento espectral (tales como la evaluación continua de la Transformada Rápida de Fourier, \gls{fft}, o la \gls{stft}), se aligera drásticamente la carga de cómputo, facilitando su despliegue y la inferencia en tiempo real sobre \textit{hardware} de recursos limitados.
+
+En esta línea, el uso de redes neuronales convolucionales unidimensionales (CNN-1D) es cada vez más frecuente. Al aplicar filtros convolucionales a lo largo del eje temporal, estas arquitecturas identifican patrones de modulación intrínsecos de la señal. Trabajos como el de Zheng et al. \cite{zheng_deep_2025} demuestran la utilidad del procesamiento directo para el reconocimiento individual de drones del mismo fabricante, alcanzando tasas de exactitud superiores al 98\,\% al operar sobre la señal IQ basándose en las imperfecciones de la circuitería del transmisor. Estudios similares \cite{hossein_zadeh_one-dimensional_2025} indican que las representaciones nativas favorecen la generalización del modelo frente a variaciones del entorno y son más robustas al sobreajuste que los modelos 2D diseñados para procesamiento de imágenes.
+
+Para solucionar la principal deficiencia de las CNN-1D, su campo receptor limitado, se recurre frecuentemente a arquitecturas híbridas. Rout et al. \cite{rout_novel_2025} combinaron una red convolucional temporal con un codificador para extraer dependencias a largo plazo entre saltos de frecuencia consecutivos. Al procesar la estructura del protocolo \gls{fhss} en su conjunto, esta red mejoró el rendimiento respecto a los modelos base CNN-2D tradicionales en entornos de alta saturación interferente, validando el uso de secuencias IQ largas sin emplear espectrogramas.
+
+Por otro lado, las redes neuronales recurrentes, en especial las redes LSTM y sus variantes bidireccionales (BiLSTM), se utilizan por su capacidad intrínseca para modelar series temporales \cite{lacy_machine_2024}. Su función en el ámbito \gls{c-uas} es seguir la evolución dinámica de las señales para detectar la cadencia, duración y periodicidad de los saltos de frecuencia característicos de los controladores de vuelo. En escenarios de baja \gls{snr} donde los filtros espaciales fallan, la memoria secuencial de una capa LSTM permite acumular evidencias débiles a lo largo del tiempo hasta confirmar la detección \cite{rout_novel_2025}.
+
+No obstante, la implementación práctica de arquitecturas recurrentes puras sobre señales de radiofrecuencia presenta problemas computacionales. La optimización de pesos sobre series temporales de alta densidad, donde un segundo de señal contiene millones de muestras I/Q, es inviable sin aplicar técnicas previas de diezmado o promediado. Esta excesiva longitud de la secuencia de entrada produce el desvanecimiento del gradiente durante la propagación del error, reduciendo de forma severa el horizonte de dependencia efectivo del modelo \cite{pascanu_difficulty_2013}. Por ello, la práctica habitual consiste en relegar las redes recurrentes a módulos secundarios situados tras una etapa convolucional de extracción de características, reduciendo de este modo el coste computacional asociado al procesamiento en su resolución original.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Arquitecturas avanzadas: transformers, atención y modelos multimodales}
+\label{subsec:arquitecturas_avanzadas}
+% ──────────────────────────────────────────────────────────────────────────────
+
+A partir del año 2022, la traslación de los mecanismos de atención y las arquitecturas Transformer al tratamiento de radiofrecuencia ha cobrado especial relevancia. El empuje proporcionado por los enormes logros de estas tecnologías en los ámbitos del procesamiento del lenguaje natural y la visión por ordenador ha facilitado su adopción en este campo.
+
+Liu et al. \cite{liu_transformer-based_2025} propusieron una arquitectura basada en Transformer condicional combinado con aprendizaje de instancias múltiples (\gls{mil}) para la detección y clasificación de señales de drones. El paradigma \gls{mil} trata cada muestra de señal como un conjunto de instancias, ráfagas individuales, de las cuales solo se requiere que al menos una pertenezca a la clase objetivo para determinar la etiqueta de ese conjunto. Esta formulación es especialmente adecuada para escenarios donde la señal de interés coexiste con interferencias dentro de la misma ventana de observación, y donde el etiquetado por ráfaga individual es inviable a escala. Los resultados publicados sobre señales simuladas muestran mejoras consistentes respecto a los modelos de referencia CNN-2D.
+
+Los módulos de atención convolucional, como CBAM (\textit{Convolutional Block Attention Module}) \cite{woo_cbam_2018}, han sido integrados en arquitecturas CNN para la señal RF, permitiendo que la red focalice su atención sobre las bandas frecuenciales y los intervalos temporales más discriminativos. Esta capacidad resulta especialmente valiosa en entornos de alta congestión espectral, donde el modelo debe aprender a ignorar las contribuciones de las interferencias y a concentrarse en la signatura espectral del objetivo.
+
+Los modelos multimodales, que fusionan información procedente de múltiples modalidades o representaciones de la señal, han sido propuestos para aprovechar la complementariedad entre características de alto nivel y de bajo nivel \cite{baltrusaitis_multimodal_2018}. En el contexto de este trabajo, la fusión de características espectrales extraídas mediante CNN con características físicas derivadas de una fase de detección y cálculo de \textit{features} previa representa el paradigma híbrido adoptado en este trabajo, motivado por la relación entre la información de fase (capturada por la CV-CNN) y la información de estructura temporal (capturada por el detector de entropía).
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Redes neuronales de valores complejos para la preservación de la fase}
+\label{sec:redes_complejas}
+% ══════════════════════════════════════════════════════════════════════════════
+
+Cuando un \gls{sdr} digitaliza el canal electromagnético, obtiene un flujo unidimensional en banda base compuesto por dos componentes matemáticamente ortogonales: la componente En Fase ($I$) y la componente en Cuadratura ($Q$). Cada muestra temporal es un número complejo $x[n] = I[n] + jQ[n]$, que codifica simultáneamente amplitud y fase de la señal.
+
+El preprocesado predominante en la literatura consiste en aplicar la Transformada de Fourier a Corto Plazo (\gls{stft}) y calcular el módulo del resultado, $|X(f,t)|^2$, para obtener un espectrograma de magnitud compatible con arquitecturas CNN preentrenadas sobre imágenes (ResNet, VGG, Inception). Esta operación descarta la información de fase. En condiciones de alta SNR, esa pérdida tiene un impacto limitado porque los gradientes de magnitud temporal-frecuencial son suficientemente nítidos para identificar los saltos \gls{fhss} \cite{ezuma_detection_2020}. Sin embargo, a medida que la SNR disminuye hasta regímenes severamente negativos, la magnitud del espectrograma comienza a quedar fuertemente enmascarada por el ruido estocástico, mientras que la componente de fase conserva una estructura geométrica determinista vinculada a la portadora que puede aportar una ventaja competitiva en la clasificación.
+
+Esta hipótesis ha motivado recientemente la aparición de arquitecturas \gls{cv-cnn}, que operan directamente sobre las muestras I/Q sin separar magnitud y fase, y han demostrado una superioridad significativa en regímenes de baja \gls{snr}. Por ejemplo, Yang \textit{et al.}~\cite{yang_deep_2022} proponen una red DC-CNN sobre datos I/Q de drones y obtienen mejoras de precisión relevantes frente a arquitecturas de valor real equivalentes. En la misma línea, estudios recientes sobre el conjunto DroneRFa muestran que a $-15$~dB la \gls{cv-cnn} alcanza un 45,86\,\% de exactitud frente al 14,03\,\% de una CNN de valor real con las mismas entradas, y que a $-20$~dB la diferencia se amplía hasta el 15,58\,\% frente al 2,20\,\% \cite{xin_radio_2026}.
+
+Las \gls{cv-cnn} constituyen el fundamento idóneo para explotar esta ventaja. Sus beneficios respecto a las redes de valor real para el procesamiento de señales IQ han sido documentados en múltiples investigaciones recientes. Trabajos específicos del dominio de la detección de \gls{uav} han confirmado estas ventajas empíricamente. Zheng et al. \cite{zheng_uavsignal_2025} demostraron que las \gls{cv-cnn} superan a sus contrapartes de valor real en más de 15 puntos porcentuales de exactitud en regímenes de \gls{snr} inferiores a $-10$\,dB, para señales con modulación \gls{fhss} y en presencia de ruido de fase realista. Esta superioridad se atribuye a la capacidad de las \gls{cv-cnn} para modelar directamente las correlaciones entre las componentes I y Q de la señal, que codifican la fase de la portadora, sin proyectar a un espacio de representación en el que esta correlación se pierde.
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Análisis de los conjuntos de datos existentes}
+\label{sec:analisis_datasets}
+% ══════════════════════════════════════════════════════════════════════════════
+
+En el ámbito del procesamiento de señales RF mediante aprendizaje profundo, la representatividad del conjunto de datos condiciona el límite teórico de generalización del modelo. Una revisión exhaustiva de la literatura revela que los marcos experimentales actuales emplean un conjunto reducido de repositorios consolidados, ninguno de los cuales satisface plenamente los requisitos necesarios para el estudio de la detección en el límite del ruido térmico.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{Especificaciones y requisitos del conjunto de datos ideal}
+\label{subsec:requisitos_dataset}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Para que un conjunto de datos sea apto para abordar el problema de la detección en el régimen de baja \gls{snr}, debe satisfacer los siguientes requisitos:
+
+\begin{itemize}
+  \item Formato IQ en banda base compleja: la señal debe proporcionarse
+  sin transformaciones destructivas previas, preservando la coherencia de fase y las firmas de \textit{hardware}.
+
+  \item Interferencia co-canal empírica: el entorno de captura debe
+  presentar colisiones espectrales reales generadas por dispositivos Wi-Fi (IEEE\,802.11) y Bluetooth, operando de forma asíncrona con el \gls{uav} objetivo en la banda \gls{ism} de 2,4\,GHz.
+
+  \item Ventanas de observación continuas: las capturas deben incluir
+  ráfagas de transmisión, intervalos de silencio y transmisiones exclusivas de interferentes, permitiendo la evaluación de la capacidad de segmentación temporal.
+
+  \item Degradación extrema de la SNR: presencia de muestras capturadas
+  físicamente con \gls{snr} negativa, sin dependencia exclusiva de la degradación sintética por inyección de \gls{awgn}.
+
+  \item Diversidad de emisores: múltiples modelos de \gls{uav} con protocolos
+  distintos, para evaluar la generalización inter-plataforma.
+\end{itemize}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{DroneRF}
+\label{subsec:dronerf}
+% ──────────────────────────────────────────────────────────────────────────────
+
+El conjunto de datos DroneRF publicado por Allahham et al. \cite{allahham_dronerf_2019} es uno de los primeros repositorios dedicados a la clasificación de aeronaves no tripuladas mediante radiofrecuencia. Su esquema de adquisición emplea receptores que digitalizan un ancho de banda de 80\,MHz para recopilar transmisiones de diferentes modelos comerciales, proporcionando un etiquetado jerárquico que distingue varios estados de vuelo del dispositivo.
+
+El protocolo experimental de este trabajo presenta deficiencias metodológicas que limitan su uso en investigaciones bajo condiciones adversas. El inconveniente principal es que el ruido de fondo se capturó sin la presencia de los emisores, y las señales activas se registraron a distancias muy reducidas de las antenas receptoras. Esta configuración produce niveles de relación señal a ruido excepcionalmente elevados. En consecuencia, estudios que utilizan este repositorio, como el de Al-Sa'd et al. \cite{al-sad_rf-based_2019} o el de Medaiyese et al. \cite{medaiyese_machine_2021}, publican precisiones de clasificación cercanas al 100\,\%. Este rendimiento demuestra que la detección se puede resolver mediante detectores de energía básicos, haciendo innecesario el uso de arquitecturas de aprendizaje profundo complejas, ya que los datos carecen de interferencia destructiva realista.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{DroneRFa y DroneRFb}
+\label{subsec:dronerf_ab}
+% ──────────────────────────────────────────────────────────────────────────────
+
+Para ampliar el volumen de muestras y la diversidad de emisores, estudios posteriores introdujeron los conjuntos DroneRFa y DroneRFb \cite{yu_open_2024, liu_method_2026}. El primero abarca simultáneamente las bandas industriales, científicas y médicas de 915\,MHz, 2,4\,GHz y 5,8\,GHz empleando frecuencias de muestreo de 100\,MHz, lo que proporciona una extensa cantidad de capturas en formato nativo para clasificar más de veinte modelos diferentes. La variante DroneRFb se centra en entornos urbanos y en la identificación individual de los dispositivos.
+
+Ambos repositorios amplían la cantidad de datos disponibles, pero mantienen el problema asociado a la alta potencia de recepción. La mayor parte de las capturas presentan condiciones de transmisión muy favorables, superando con amplitud los 10\,dB sobre el piso de ruido térmico. Debido a esto, los investigadores que evalúan la robustez de algoritmos frente a ruido se ven obligados a degradar las señales artificialmente mediante la inyección de ruido gaussiano blanco. Esta alteración enmascara el comportamiento real de las interferencias electromagnéticas, cuya naturaleza no estacionaria resulta imposible de simular correctamente empleando modificaciones estadísticas simples.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{UAVSig}
+\label{subsec:uavsig}
+% ──────────────────────────────────────────────────────────────────────────────
+
+La base de datos UAVSig, recopilada por Zhao et al. \cite{zhao_drone_2024}, introduce una metodología orientada a la identificación física de los dispositivos. Para ello, suministra una extensa cantidad de segmentos capturados a una frecuencia de muestreo de 10\,MHz, caracterizándose por incluir grabaciones sistemáticas de diez unidades físicas idénticas del mismo fabricante. Su objetivo principal es permitir el estudio de las imperfecciones y tolerancias asociadas a los circuitos de radiofrecuencia de los equipos transmisores.
+
+Aunque resulta útil para la extracción de firmas físicas, la estructura de estos datos no permite evaluar la detección y segmentación temporal en condiciones reales. Todas las ráfagas se proporcionan ya previamente recortadas y libres de solapamientos con otras señales, eliminando el problema de la detección ciega que sufren los sistemas operativos de monitorización. Investigaciones que utilizan este conjunto, como el trabajo propuesto por Tiras et al. \cite{tiras_crossrf_2025}, requieren de forma implícita un mecanismo previo capaz de localizar la transmisión exacta en el medio electromagnético, una suposición inviable en escenarios reales con alta congestión espectral.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{DRFF-R2}
+\label{subsec:drff_r2}
+% ──────────────────────────────────────────────────────────────────────────────
+
+La disponibilidad de plataformas de captura complejas ha facilitado la creación de grandes repositorios como DRFF-R2 \cite{zheng_multi-scenario_2026}. Este conjunto utiliza un sistema de adquisición de varios escenarios que almacena millones de muestras complejas de forma continua, documentando explícitamente las colisiones espectrales provocadas por el tráfico inalámbrico concurrente y los protocolos de área local que operan en la misma banda frecuencial.
+
+El principal problema metodológico de DRFF-R2 es su limitada diversidad de marcas, ya que todas las aeronaves catalogadas pertenecen al mismo fabricante comercial. El entrenamiento de modelos de clasificación utilizando estos datos genera un sesgo de representación evidente: las redes neuronales tienden a asimilar la estructura temporal específica de los protocolos propietarios de ese fabricante, reduciendo drásticamente su precisión frente a plataformas de terceros. Además, las arquitecturas entrenadas con este corpus \cite{zheng_uav_2025} requieren que la relación señal a ruido inicial sea lo suficientemente elevada como para permitir el cálculo de representaciones espectrales fiables, evitando el problema del procesado en regímenes de baja intensidad.
+
+% ──────────────────────────────────────────────────────────────────────────────
+\subsection{\textit{NoisyUAV}: el conjunto de datos seleccionado}
+\label{subsec:noisyuav}
+% ──────────────────────────────────────────────────────────────────────────────
+
+La literatura muestra que los conjuntos de datos disponibles no cubren las exigencias técnicas necesarias para validar la detección en entornos altamente ruidosos. Frente a este contexto, el conjunto de datos \textit{NoisyUAV}, cuya descripción en detalle se expone en el Capítulo~\ref{cap:MarcoTeorico}, es la única alternativa analizada que cumple de forma conjunta con todos los criterios y requisitos documentados en la Sección~\ref{subsec:requisitos_dataset}.
+
+El conjunto proporciona ventanas temporales ininterrumpidas de 75 milisegundos capturadas a 14\,MHz, alcanzando un volumen de 17.744 señales continuas generadas por seis modelos telemétricos de fabricantes distintos y empleando varios protocolos de salto de frecuencia. El diseño experimental garantiza además la inclusión real de colisiones temporales generadas por redes Wi-Fi y dispositivos Bluetooth activos, todo ello con una potencia de señal que disminuye uniformemente hasta los $-20$\,dB. Esta variabilidad de condiciones electromagnéticas hace de este repositorio una herramienta adecuada para evaluar las arquitecturas de clasificación propuestas en los regímenes más restrictivos documentados hasta la fecha.
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Síntesis y posicionamiento del trabajo}
+\label{sec:sintesis_estado_arte}
+% ══════════════════════════════════════════════════════════════════════════════
+
+% Reescrito: eliminados marcadores de lista robóticos (En primer/segundo/tercer lugar) y «de forma exhaustiva»
+El análisis sistemático de la literatura presentado en este capítulo permite identificar tres vacíos de investigación que el presente trabajo aborda de forma directa. Los enfoques CNN-2D sobre espectrogramas, incluyendo el trabajo de referencia de Glüge et al. \cite{gluge_robust_2024}, proyectan la señal IQ a una representación en el dominio de la frecuencia que descarta la información de fase. Las \gls{cv-cnn} propuestas en este trabajo operan sobre IQ en bruto preservando íntegramente esta información, con la hipótesis de que la fase resulta discriminante en el régimen de baja \gls{snr} donde la amplitud espectral no lo es.
+
+Frente a enfoques anteriores, este trabajo integra un detector basado en la entropía de Shannon como mecanismo de apoyo en la toma de decisiones. Aunque el modelo opera sobre ventanas continuas de la señal IQ, esta detección entrópica aporta un contexto temporal fundamental. La alineación entre la \gls{cv-cnn} y las ráfagas \gls{fhss}, implementada mediante variantes de doble flujo, mitiga la desalineación espacial característica de modelos previos como HybridCVCNN, incrementando de este modo la coherencia de la representación aprendida.
+
+Adicionalmente, los estudios actuales raramente incluyen evaluaciones sistemáticas sobre el conjunto \textit{NoisyUAV} que presenten resultados separados por nivel de \gls{snr} y emisor RF mediante arquitecturas de valor complejo. Los experimentos detallados en el Capítulo~\ref{cap:conclusiones} abordan esta necesidad experimental, estableciendo una base de comparación rigurosa para futuras investigaciones en el ámbito de la detección de \gls{uav} frente a condiciones electromagnéticas adversas.
