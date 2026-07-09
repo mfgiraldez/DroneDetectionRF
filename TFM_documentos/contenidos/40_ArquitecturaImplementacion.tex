@@ -18,14 +18,14 @@ El detector se estructura en cuatro etapas secuenciales que transforman la seña
 
 \subsubsection{Etapa 1: cálculo de la entropía blanqueada y \textit{bins} frecuenciales activos}
 
-A partir de la señal compleja $s[n]$, se obtiene la \gls{stft} y se aplica el blanqueo espectral (Ecuación~\ref{eq:whitening}). Sobre el espectro blanqueado $\tilde{P}_{k,m}$, se computa la curva de entropía $H(m)$ (Ecuación~\ref{eq:entropia_shannon}) y, de forma paralela, el vector de \textit{bins} activos $n_{\text{act}}(m)$:
+A partir de la señal discreta recibida $r[n]$, se obtiene la \gls{stft} y se aplica el blanqueo espectral (Ecuación~\ref{eq:whitening}). Sobre el espectro blanqueado $\tilde{P}_{k,m}$, se calcula la curva de entropía $H(m)$ (Ecuación~\ref{eq:entropia_shannon}) y, de forma paralela, el vector de \textit{bins} activos $n_{\text{act}}(m)$:
 
 \begin{equation}
     n_{\text{act}}(m) = \sum_{k=0}^{N_w-1} \mathbf{1}\!\left[\tilde{P}_{k,m} > \beta\right]
     \label{eq:bins_activos}
 \end{equation}
 
-Para fundamentar estadísticamente este umbral $\beta$, es necesario analizar la distribución probabilística de la densidad espectral de potencia bajo la hipótesis nula ($\mathcal{H}_0$), es decir, asumiendo que el canal contiene únicamente ruido térmico. El ruido en banda base se modela como un proceso Gaussiano Complejo Circularmente Simétrico (\gls{cscg}) $n[m] \sim \mathcal{CN}(0, \sigma^2)$, compuesto por dos procesos gaussianos reales independientes para las componentes en fase y cuadratura \cite{kay_fundamentals_1998}.
+Para fundamentar estadísticamente este umbral $\beta$, es necesario analizar la distribución probabilística de la densidad espectral de potencia bajo la hipótesis nula ($\mathcal{H}_0$), es decir, asumiendo que el canal contiene únicamente ruido térmico. Como se definió en el modelo del sistema (Sección~\ref{sec:modelo_sistema}), el ruido en banda base se modela como un proceso gaussiano complejo propio o circularmente simétrico (\gls{cscg}), $n[m] \sim \mathcal{CN}(0, \sigma^2)$ \cite{kay_fundamentals_1998}.
 
 Dado que la Transformada de Fourier es un operador estrictamente lineal, el ruido proyectado en cada \textit{bin} de frecuencia $k$ sigue teniendo una distribución compleja gaussiana $N_k \sim \mathcal{CN}(0, \sigma_N^2)$. Por lo tanto, sus partes real e imaginaria se distribuyen como:
 
@@ -266,7 +266,7 @@ A continuación se detallan los componentes y tensores de cada rama:
         \item ComplexConv1d\_4: $128$ canales de salida complejos, kernel $k=11$, \textit{stride} $s=1$, \textit{padding} $p=5$. Mantiene la dimensión temporal constante.
     \end{itemize}
 
-    Cada convolución compleja utiliza la formulación del cálculo de Wirtinger para garantizar la holomorfía y la derivabilidad de la función de coste respecto a los pesos complejos durante el proceso de retropropagación \cite{hirose_complex-valued_2012}. Cada bloque convolucional va seguido de una capa de normalización por lotes compleja y la función de activación \gls{crelu}, aplicando la rectificación lineal de forma independiente a las partes real e imaginaria de la señal \cite{trabelsi_deep_2018}.
+    El entrenamiento de estas capas convolucionales se fundamenta en la retropropagación basada en el cálculo de Wirtinger (Sección~\ref{sec:cvcnn}). Cada bloque convolucional va seguido de una capa de normalización por lotes compleja (\gls{cbn}) y la función de activación \gls{crelu}, cuyas definiciones y fundamentos matemáticos se han desarrollado en el capítulo anterior \cite{trabelsi_deep_2018}.
     
     A continuación, las características complejas se proyectan al dominio de los números reales mediante el operador módulo $|z| = \sqrt{\text{Re}(z)^2 + \text{Im}(z)^2 + \epsilon}$, donde el término estabilizador $\epsilon = 10^{-8}$ evita singularidades numéricas en el cálculo del gradiente. Esta proyección colapsa los $256$ mapas de características a $128$ canales reales. Posteriormente, una capa de \textit{adaptive pooling} reduce la dimensión temporal a $32$ intervalos uniformes, generando un tensor de salida de $[128 \times 32]$. Este tensor se aplana a un vector de $4.096$ elementos y alimenta a una capa densa que proyecta la información a un espacio de \textit{embedding} de $256$ características reales, seguido de una capa de \textit{dropout} con una probabilidad del $30~\%$.
     
@@ -307,7 +307,7 @@ El entrenamiento de la arquitectura se formaliza bajo un paradigma de clasificac
         \begin{equation}
             \tilde{x} = x \cdot e^{j\Delta\phi}, \quad \Delta\phi \sim \mathcal{U}(0, 2\pi)
         \end{equation}
-        \item Inyección de \gls{awgn}: Se inyecta ruido gaussiano blanco complejo adicional a la señal temporal ($\tilde{x} = \tilde{x} + \mathcal{CN}(0, \sigma_{\text{aug}}^2)$) con $\sigma_{\text{aug}} = 0.02$. En consistencia con el modelo térmico del receptor expuesto en el marco teórico, este ruido simulado es un proceso gaussiano complejo propio, o de simetría circular (\gls{cscg}). Esto garantiza que sus componentes en fase y cuadratura sean estadísticamente independientes, de media nula y compartan idéntica varianza ($\sigma_{\text{aug}}^2/2$). Esta degradación artificial de la \gls{snr} actúa como un difuminado estocástico del límite de decisión en el espacio de entrada de altas dimensiones, endureciendo y ensanchando la frontera probabilística que separa las emisiones de los drones de las interferencias.
+        \item Inyección de \gls{awgn}: Se inyecta ruido gaussiano blanco complejo adicional a la señal temporal ($\tilde{x} = \tilde{x} + \mathcal{CN}(0, \sigma_{\text{aug}}^2)$) con $\sigma_{\text{aug}} = 0.02$. En estricta consistencia con el modelo térmico formulado en la Sección~\ref{sec:modelo_sistema}, el ruido inyectado es un proceso \gls{cscg} cuyas componentes ortogonales comparten una varianza de $\sigma_{\text{aug}}^2/2$. Esta degradación artificial de la \gls{snr} actúa como un difuminado estocástico del límite de decisión en el espacio de entrada, endureciendo la frontera probabilística que separa las transmisiones de los drones frente a las interferencias.
     \end{itemize}
 \end{enumerate}
 
@@ -335,7 +335,7 @@ La vulnerabilidad estructural del modelo base con un único flujo de datos, deta
     \label{fig:dualstream_attention_architecture}
 \end{sidewaysfigure}
 
-El modelo \textit{DualStream} complementa la rama convolucional 1D principal (que procesa la señal IQ del transitorio segmentado por el detector) con una segunda rama convolucional que opera en paralelo. Esta nueva rama procesa un vector unidimensional con la \gls{psd} estimada sobre la ventana de observación completa de $75$\,ms mediante el método de Welch. Esta técnica de estimación espectral mitiga la alta varianza estadística inherente al periodograma estándar dividiendo la señal temporal en bloques superpuestos. A cada segmento se le aplica una función de ventana (de forma análoga a la \gls{stft} descrita en el Capítulo \ref{cap:MarcoTeorico}), se computa su transformada discreta y, finalmente, se promedian las densidades espectrales resultantes. Esta estabilización de la varianza se obtiene a expensas de una disminución proporcional en la resolución frecuencial.
+El modelo \textit{DualStream} complementa la rama convolucional 1D principal (que procesa la señal IQ del transitorio segmentado por el detector) con una segunda rama convolucional que opera en paralelo. Esta nueva rama procesa un vector unidimensional con la \gls{psd} estimada sobre la ventana de observación completa de $75$\,ms mediante el método de Welch. Esta técnica de estimación espectral mitiga la alta varianza estadística inherente al periodograma estándar dividiendo la señal temporal en bloques superpuestos. A cada segmento se le aplica una función de ventana (de forma análoga a la \gls{stft} descrita en el Capítulo \ref{cap:MarcoTeorico}), se calcula su transformada discreta y, finalmente, se promedian las densidades espectrales resultantes. Esta estabilización de la varianza se obtiene a expensas de una disminución proporcional en la resolución frecuencial.
 
 En esta etapa de preprocesamiento, la arquitectura no alimenta la rama frecuencial con la potencia en escala lineal. Las señales de radiofrecuencia abarcan un rango dinámico extremadamente amplio, por lo que la introducción directa de magnitudes lineales induciría inestabilidades numéricas severas en los gradientes durante el entrenamiento. Para solventar este problema, la \gls{psd} obtenida se transforma a una escala logarítmica previamente a su inserción en la red, comprimiendo el rango dinámico y garantizando una convergencia estable de los parámetros.
 
@@ -371,7 +371,7 @@ Una concatenación paramétrica convencional asigna invariablemente la misma imp
 \end{equation}
 
 El tensor $x \in \mathbb{R}^{256}$ se introduce en una red neuronal diseñada específicamente para inferir la atención. El tensor atraviesa una capa densa que reduce la dimensionalidad a $D=128$. El vector resultante pasa por una capa de \textit{Batch Normalization} y una función de activación ReLU, seguida de una capa de \textit{Dropout} con probabilidad de desconexión del $0.2$. Una segunda transformación proyecta este vector intermedio hacia un subespacio de $64$ dimensiones, seguida de otra capa de activación ReLU. Una tercera capa densa mapea estas $64$ características a un vector de salida $z \in \mathbb{R}^{2}$, que contiene las puntuaciones numéricas brutas que evalúan la fiabilidad asignada a cada rama de entrada.
-Los coeficientes escalares definitivos se computan aplicando la función matemática \textit{Softmax} sobre el vector $z$:
+Los coeficientes escalares definitivos se calculan aplicando la función matemática \textit{Softmax} sobre el vector $z$:
 \begin{equation}
     \begin{pmatrix} \alpha_{\text{IQ}} \\ \alpha_{\text{\gls{psd}}} \end{pmatrix} = \text{Softmax}(z) = \frac{1}{\sum_{i \in \{\text{IQ}, \text{\gls{psd}}\}} e^{z_i}} \begin{pmatrix} e^{z_{\text{IQ}}} \\ e^{z_{\text{\gls{psd}}}} \end{pmatrix}
 \end{equation}
@@ -504,7 +504,7 @@ La arquitectura secuencial de la rama temporal se define como sigue:
     \item Proyección Lineal: Capa densa que reduce el tensor latente temporal de $256$ a $128$ dimensiones.
 \end{itemize}
 
-La rama frecuencial computa la \gls{psd} directamente durante el paso de inferencia en la GPU. Se aplica una ventana de Hann y la \gls{fft} sobre los tensores de entrada, reduciendo la dimensionalidad a 2048 \textit{bins} en escala logarítmica. La secuencia de capas de extracción de esta rama se define mediante los siguientes bloques:
+La rama frecuencial calcula la \gls{psd} directamente durante el paso de inferencia en la GPU. Se aplica una ventana de Hann y la \gls{fft} sobre los tensores de entrada, reduciendo la dimensionalidad a 2048 \textit{bins} en escala logarítmica. La secuencia de capas de extracción de esta rama se define mediante los siguientes bloques:
 \begin{itemize}
     \item Conv1D\_PSD\_1: $k=15$, $s=2$, $p=7$. Proyecta el espectro a $32$ canales. Seguida de \textit{Batch Normalization}, activación ReLU y \textit{max-pooling} ($k=2$).
     \item Conv1D\_PSD\_2: $k=7$, $s=2$, $p=3$. Proyecta a $64$ canales. Seguida de \textit{Batch Normalization}, ReLU y \textit{max-pooling} ($k=2$).

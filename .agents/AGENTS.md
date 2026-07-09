@@ -15,3 +15,7 @@
 1. NO utilices NUNCA analogías poéticas, florituras literarias ni figuras retóricas (por ejemplo, evita verbos o frases como "la señal es eclipsada", "queda sepultada", "camuflada", etc.).
 2. Mantén una carga ingenieril rigurosa pero sin hacer la lectura pesada o artificiosa. 
 3. Llama a cada fenómeno físico o matemático por su término técnico estándar (por ejemplo: usar "la potencia de la señal es inferior a la del ruido" en lugar de expresiones metafóricas).
+
+# Uso de Skills
+
+**MANDATORIO:** SIEMPRE, antes de escribir o redactar cambios en los ficheros `.tex`, debes repasar las `skills` cargadas en tu contexto (especialmente las restricciones de vocabulario y estilo de escritura). Es obligatorio. ESTÁ PROHIBIDO redactar cambios en los ficheros `.tex` sin usar y acatar estrictamente las SKILLS.

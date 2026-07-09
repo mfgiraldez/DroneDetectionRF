@@ -198,7 +198,7 @@ Dron Turnigy 9X & 6 & 855 & 2.44500 & 2.0 & 1.30\\ \bottomrule
 \section{Justificación del Procesamiento Directo I/Q frente a Representaciones de Tiempo-Frecuencia}
 \label{sec:justificacion_procesamiento_IQ}
 
-El paradigma predominante en la literatura reciente orientada a la clasificación de señales electromagnéticas mediante aprendizaje profundo, tal y como se detalla en el Capítulo \ref{cap:estado_arte}, se fundamenta en la proyección de la serie temporal unidimensional hacia una representación bidimensional en el dominio tiempo-frecuencia. En este contexto, el estimador de densidad espectral más empleado es el espectrograma \cite{gluge_robust_2024, zhao_drone_2024}. Matemáticamente, esta matriz se computa evaluando la magnitud al cuadrado de la Transformada de Fourier a Corto Plazo (\textit{Short-Time Fourier Transform}, STFT), denotada por la expresión:
+El paradigma predominante en la literatura reciente orientada a la clasificación de señales electromagnéticas mediante aprendizaje profundo, tal y como se detalla en el Capítulo \ref{cap:estado_arte}, se fundamenta en la proyección de la serie temporal unidimensional hacia una representación bidimensional en el dominio tiempo-frecuencia. En este contexto, el estimador de densidad espectral más empleado es el espectrograma \cite{gluge_robust_2024, zhao_drone_2024}. Matemáticamente, esta matriz se calcula evaluando la magnitud al cuadrado de la Transformada de Fourier a Corto Plazo (\textit{Short-Time Fourier Transform}, STFT), denotada por la expresión:
 
 \begin{equation}
     S[m,k] = \left| \sum_{n=0}^{N_w-1} y[n+mH] w[n] e^{-j\frac{2\pi}{N_w}kn} \right|^2
@@ -304,7 +304,7 @@ Considérese la representación tiempo-frecuencia de la señal discreta $y[n]$ o
     \label{eq:prob_espectral}
 \end{equation}
 
-A partir de ella, la entropía de Shannon en bits por \textit{frame} temporal se computa como:
+A partir de ella, la entropía de Shannon en bits por \textit{frame} temporal se calcula como:
 
 \begin{equation}
     H(m) = -\sum_{k=0}^{N-1} p_{k,m} \cdot \log_2\!\left(p_{k,m}\right)
