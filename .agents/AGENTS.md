@@ -8,3 +8,10 @@
 4. Mantén la coherencia absoluta con el flujo del documento.
 
 **La orden principal es: LEER EL CONTEXTO ANTES DE REDACTAR.**
+
+# Estilo de Escritura Técnico y Directo
+
+**MANDATORIO:** El estilo de redacción en todos los documentos debe ser estrictamente técnico, directo y sencillo de entender.
+1. NO utilices NUNCA analogías poéticas, florituras literarias ni figuras retóricas (por ejemplo, evita verbos o frases como "la señal es eclipsada", "queda sepultada", "camuflada", etc.).
+2. Mantén una carga ingenieril rigurosa pero sin hacer la lectura pesada o artificiosa. 
+3. Llama a cada fenómeno físico o matemático por su término técnico estándar (por ejemplo: usar "la potencia de la señal es inferior a la del ruido" en lugar de expresiones metafóricas).
